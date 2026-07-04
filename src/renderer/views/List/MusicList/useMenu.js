@@ -17,6 +17,7 @@ export default ({
   handleShowSortModal,
   handleOpenMusicDetail,
   handleCopyName,
+  handleOpenFolder,
   handleDislikeMusic,
   handleRemoveMusic,
 }) => {
@@ -24,6 +25,7 @@ export default ({
     play: true,
     playLater: true,
     copyName: true,
+    openFolder: true,
     addTo: true,
     moveTo: true,
     sort: true,
@@ -79,6 +81,11 @@ export default ({
         name: t('list__copy_name'),
         action: 'copyName',
         disabled: !itemMenuControl.copyName,
+      },
+      {
+        name: t('list__open_folder'),
+        action: 'openFolder',
+        disabled: !itemMenuControl.openFolder,
       },
       {
         name: t('list__source_detail'),
@@ -139,6 +146,9 @@ export default ({
         break
       case 'copyName':
         handleCopyName(index)
+        break
+      case 'openFolder':
+        handleOpenFolder(index)
         break
       case 'addTo':
         handleShowMusicAddModal(index)

@@ -9,6 +9,8 @@ import { formatMusicName, toOldMusicInfo } from '@renderer/utils/index'
 import { addDislikeInfo, hasDislike } from '@renderer/core/dislikeList'
 import { playNext } from '@renderer/core/player'
 import { playMusicInfo } from '@renderer/store/player/state'
+import { openDirInExplorer } from '@renderer/utils/ipc'
+import { checkPath } from '@common/utils/nodejs'
 
 
 export default ({ props, list, selectedList, removeAllSelect }) => {
@@ -35,6 +37,14 @@ export default ({ props, list, selectedList, removeAllSelect }) => {
   const handleCopyName = index => {
     const minfo = list.value[index]
     clipboardWriteText(formatMusicName(appSetting['download.fileName'], minfo.name, minfo.singer))
+  }
+
+  const handleOpenFolder = async(index) => {
+    const minfo = list.value[index]
+    if (minfo.source !== 'local') return
+    const filePath = minfo.meta.filePath
+    if (!filePath || !await checkPath(filePath)) return
+    await openDirInExplorer(filePath)
   }
 
   const handleDislikeMusic = async(index) => {
@@ -72,6 +82,7 @@ export default ({ props, list, selectedList, removeAllSelect }) => {
     handleSearch,
     handleOpenMusicDetail,
     handleCopyName,
+    handleOpenFolder,
     handleDislikeMusic,
     handleRemoveMusic,
   }
