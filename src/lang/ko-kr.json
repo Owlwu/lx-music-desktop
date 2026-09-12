@@ -143,6 +143,7 @@
   "list_update_modal__title": "목록 업데이트 관리",
   "list_update_modal__update": "동기화",
   "lists__add_local_file_desc": "노래 파일을 선택하세요",
+  "lists__add_local_folder_desc": "Choose song folder",
   "lists__dislike_music_singer_tip": "{singer}의 \"{name}\"을(를) 정말 싫어요 처리하시겠습니까?",
   "lists__dislike_music_tip": "\"{name}\"을(를) 정말 싫어요 처리하시겠습니까?",
   "lists__duplicate": "중복된 곡",
