@@ -31,6 +31,7 @@ export default {
       if (setting['desktopLyric.style.isFontWeightFont']) name.push(styles.fontWeightFont)
       if (setting['desktopLyric.style.isFontWeightLine']) name.push(styles.fontWeightLine)
       if (setting['desktopLyric.style.isFontWeightExtended']) name.push(styles.fontWeightExtended)
+      if (setting['desktopLyric.scrollAlign'] === 'top') name.push(styles.alignTop)
       return name
     })
     const lrcStyles = computed(() => ({
@@ -79,6 +80,9 @@ export default {
   font-size: 16px;
   contain: strict;
   cursor: move;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
   // font-weight: bold;
 
   :global {
@@ -92,6 +96,14 @@ export default {
     .shadow {
       color: transparent;
       // margin-left: -0.14em;
+    }
+    // 单行显示：仅展示当前句，其余句隐藏
+    .line-content {
+      display: none;
+      &.single-line-show {
+        display: block;
+        margin: 0;
+      }
     }
     .line-content {
       line-height: 1.2;
@@ -203,6 +215,10 @@ export default {
 // }
 .lyricSpace {
   height: 80%;
+  display: none;
+}
+.alignTop {
+  justify-content: flex-start;
 }
 // .lyric-text {
 

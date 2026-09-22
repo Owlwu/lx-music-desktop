@@ -154,6 +154,16 @@ export default (isComputeHeight) => {
     startLyricScrollTimeout()
   }
 
+  // 桌面歌词固定为单行显示，仅显示当前句（前奏无词时显示首句）
+  const updateActiveDisplay = () => {
+    if (!dom_lines?.length) return
+    const curLine = dom_lines[lyric.line]
+    for (const line of dom_lines) {
+      if (line !== curLine) line.classList.remove('single-line-show')
+    }
+    curLine?.classList.add('single-line-show')
+  }
+
   const setLyric = (lines) => {
     const dom_line_content = document.createDocumentFragment()
     for (const line of lines) {
@@ -164,6 +174,7 @@ export default (isComputeHeight) => {
     nextTick(() => {
       dom_lines = dom_lyric.value.querySelectorAll('.line-content')
       line_heights = Array.from(dom_lines).map(l => l.clientHeight)
+      updateActiveDisplay()
       handleScrollLrc()
     })
   }
@@ -190,6 +201,7 @@ export default (isComputeHeight) => {
     setImmediate(() => {
       prevActiveLine = line
     })
+    updateActiveDisplay()
     if (line < 0 || !lyric.lines.length) return
     if (line == 0 && isSetedLines) return isSetedLines = false
     isSetedLines &&= false
