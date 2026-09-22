@@ -72,3 +72,5 @@ publish/utils/githubToken.js
 
 src/**/*-internal.js
 /resources/music/
+/.vscode/
+/.github/
