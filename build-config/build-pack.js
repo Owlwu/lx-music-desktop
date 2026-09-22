@@ -1,5 +1,8 @@
 /* eslint-disable no-template-curly-in-string */
 
+process.env.ELECTRON_MIRROR ??= 'https://npmmirror.com/mirrors/electron/'
+process.env.ELECTRON_BUILDER_BINARIES_MIRROR ??= 'https://npmmirror.com/mirrors/electron-builder-binaries/'
+
 const builder = require('electron-builder')
 const beforePack = require('./build-before-pack')
 const afterPack = require('./build-after-pack')
