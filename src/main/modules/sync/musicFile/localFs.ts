@@ -5,10 +5,8 @@ import {
   assertSafeRelPath,
   buildIndex,
   getLyricRelPath,
-  getRelDir,
   isAudioFileName,
   isLyricFileName,
-  normalizeRelPath,
   type FileIndex,
   type ScanEntry,
 } from './diff'
@@ -136,11 +134,6 @@ export const deleteFileWithLyric = async(root: string, relPath: string, withLyri
   await removeIfExists(absPath)
   if (withLyric) await removeIfExists(toAbsPath(root, getLyricRelPath(relPath)))
 }
-
-/** 读取本机某个相对路径对应的绝对路径（仅用于日志/展示） */
-export const describePath = (root: string, relPath: string) => path.join(root, ...normalizeRelPath(relPath).split('/'))
-
-export const relDirOf = getRelDir
 
 const removeIfExists = async(absPath: string) => {
   try {
