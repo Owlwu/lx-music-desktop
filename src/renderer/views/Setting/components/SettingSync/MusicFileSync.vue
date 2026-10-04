@@ -39,6 +39,16 @@ dd#sync_music_file
               span(:class="$style.itemText")
                 span(:class="$style.itemPath") {{ item.path }}
                 span(:class="$style.itemMeta") {{ itemMeta(item) }}
+            template(v-if="group.key === 'conflict'")
+              div(:class="$style.direction")
+                button(
+                  :class="[$style.dirBtn, { [$style.dirActive]: directionOf(item) === 'pull' }]"
+                  @click="setDirection(item, 'pull')"
+                ) {{ $t('setting__sync_music_file_use_remote') }}
+                button(
+                  :class="[$style.dirBtn, { [$style.dirActive]: directionOf(item) === 'push' }]"
+                  @click="setDirection(item, 'push')"
+                ) {{ $t('setting__sync_music_file_use_local') }}
     MusicFileScopeModal(v-model="isShowScope" :folders="folders" :scope="scope" @update:scope="handleScopeChange")
 </template>
 
@@ -56,7 +66,7 @@ import {
 import { useI18n } from '@renderer/plugins/i18n'
 import MusicFileScopeModal from './MusicFileScopeModal.vue'
 
-const GROUP_KEYS = ['remoteAdded', 'localAdded']
+const GROUP_KEYS = ['remoteAdded', 'localAdded', 'remoteDeleted', 'localDeleted', 'conflict']
 
 const formatSize = (bytes) => {
   if (bytes == null) return '-'
@@ -170,6 +180,10 @@ export default {
     const setChecked = (item, value) => {
       selection.checked[selectionKey(item)] = value
     }
+    const setDirection = (item, value) => {
+      selection.direction[selectionKey(item)] = value
+    }
+    const directionOf = (item) => selection.direction[selectionKey(item)] ?? item.defaultDirection
     const groupAllChecked = (key) => {
       const items = plan.value?.[key] ?? []
       return items.length > 0 && items.every(item => selection.checked[selectionKey(item)])
@@ -275,9 +289,11 @@ export default {
       progressText,
       selectionKey,
       itemMeta,
+      directionOf,
       groupAllChecked,
       setGroupChecked,
       setChecked,
+      setDirection,
       handleSelectRoot,
       handleOpenScope,
       handleScopeChange,
@@ -383,5 +399,31 @@ export default {
 .itemMeta {
   color: var(--color-font-label);
   font-size: 11px;
+}
+
+.direction {
+  margin-left: auto;
+  flex: none;
+  display: flex;
+  gap: 5px;
+  padding-left: 10px;
+}
+
+.dirBtn {
+  border: 1px solid var(--color-border, rgba(128, 128, 128, 0.35));
+  background: transparent;
+  color: var(--color-font);
+  font-size: 11px;
+  border-radius: @form-radius;
+  padding: 2px 6px;
+  cursor: pointer;
+  outline: none;
+  opacity: 0.6;
+}
+
+.dirActive {
+  opacity: 1;
+  border-color: var(--color-primary);
+  color: var(--color-primary);
 }
 </style>

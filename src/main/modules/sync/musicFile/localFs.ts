@@ -134,3 +134,16 @@ export const rootExists = async(root: string) => {
     return false
   }
 }
+
+/** 删除文件 */
+export const deleteFile = async(root: string, relPath: string) => {
+  await removeIfExists(toAbsPath(root, relPath))
+}
+
+const removeIfExists = async(absPath: string) => {
+  try {
+    await fsp.unlink(absPath)
+  } catch (err: any) {
+    if (err?.code !== 'ENOENT') throw err
+  }
+}

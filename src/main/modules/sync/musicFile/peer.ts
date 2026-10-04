@@ -7,6 +7,7 @@ export interface MusicFilePeer {
   musicFile_get_index: (scope: string[]) => Promise<LX.Sync.MusicFile.FileIndex>
   musicFile_read_file: (path: string, offset: number, size: number) => Promise<LX.Sync.MusicFile.ReadFileResult>
   musicFile_write_file: (path: string, offset: number, data: string, isLast: boolean) => Promise<void>
+  musicFile_delete_file: (path: string) => Promise<void>
 }
 
 /**

@@ -66,6 +66,9 @@ export const File = {
   dislikeSnapshotDir: 'snapshot',
   dislikeSnapshotInfoJSON: 'snapshotInfo.json',
 
+  musicFileDir: 'musicFile',
+  musicFileBaselineJSON: 'baseline.json',
+
   syncAuthKeysJSON: 'syncAuthKey.json',
 } as const
 

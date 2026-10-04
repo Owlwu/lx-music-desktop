@@ -1,5 +1,5 @@
 // 这个文件导出的方法将暴露给对方设备调用，第一个参数固定为当前 socket 对象
-import { getIndex, getRoot, readChunk, writeChunk } from './service'
+import { getIndex, getRoot, readChunk, removeFile, writeChunk } from './service'
 
 type HandlerSocket = LX.Sync.Client.Socket | LX.Sync.Server.Socket
 
@@ -31,6 +31,11 @@ const handler: LX.Sync.ClientSyncHandlerMusicFilePeerActions<HandlerSocket> = {
   async musicFile_write_file(socket, path, offset, data, isLast) {
     assertReady(socket)
     await writeChunk(path, offset, data, isLast)
+  },
+
+  async musicFile_delete_file(socket, path) {
+    assertReady(socket)
+    await removeFile(path)
   },
 }
 

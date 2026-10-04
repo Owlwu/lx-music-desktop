@@ -99,6 +99,8 @@ declare namespace LX {
       interface ApplyResult {
         downloaded: number
         uploaded: number
+        deletedLocal: number
+        deletedRemote: number
         errors: string[]
       }
     }
