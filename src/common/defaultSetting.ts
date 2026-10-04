@@ -144,6 +144,7 @@ const defaultSetting: LX.AppSetting = {
   'sync.server.port': '23332',
   'sync.server.maxSsnapshotNum': 5,
   'sync.client.host': '',
+  'sync.musicFile.root': '',
 
   'openAPI.enable': false,
   'openAPI.port': '23330',

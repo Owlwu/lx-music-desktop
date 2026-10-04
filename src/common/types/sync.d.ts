@@ -31,6 +31,7 @@ declare namespace LX {
     | SyncAction<'close_select_mode'>
     | SyncAction<'client_status', ClientStatus>
     | SyncAction<'server_status', ServerStatus>
+    | SyncAction<'musicFile_progress', MusicFile.Progress>
 
     type SyncServiceActions = SyncAction<'select_mode', ModeType>
     | SyncAction<'get_server_status'>
@@ -38,6 +39,10 @@ declare namespace LX {
     | SyncAction<'generate_code'>
     | SyncAction<'enable_server', EnableServer>
     | SyncAction<'enable_client', EnableClient>
+    | SyncAction<'musicFile_get_config'>
+    | SyncAction<'musicFile_compare'>
+    | SyncAction<'musicFile_apply', MusicFile.Selection>
+    | SyncAction<'musicFile_cancel'>
 
     type ServerDevices = ServerKeyInfo[]
 
@@ -75,10 +80,14 @@ declare namespace LX {
     interface DislikeConfig {
       skipSnapshot: boolean
     }
+    interface MusicFileConfig {
+      enabled: boolean
+    }
     type ServerType = 'desktop-app' | 'server'
     interface EnabledFeatures {
       list?: false | ListConfig
       dislike?: false | DislikeConfig
+      musicFile?: false | MusicFileConfig
     }
     type SupportedFeatures = Partial<{ [k in keyof EnabledFeatures]: number }>
   }

@@ -809,6 +809,46 @@ export const removeSyncServerDevice = (clientId: string) => {
   return rendererInvoke<string>(WIN_MAIN_RENDERER_EVENT_NAME.sync_remove_server_device, clientId)
 }
 
+/**
+ * 本地音乐文件同步：读取当前配置
+ */
+export const musicFileGetConfig = () => {
+  return rendererInvoke<LX.Sync.SyncServiceActions, LX.Sync.MusicFile.Config>(
+    WIN_MAIN_RENDERER_EVENT_NAME.sync_action,
+    { action: 'musicFile_get_config' },
+  )
+}
+
+/**
+ * 本地音乐文件同步：扫描两端并生成变更清单
+ */
+export const musicFileCompare = () => {
+  return rendererInvoke<LX.Sync.SyncServiceActions, LX.Sync.MusicFile.CompareResult>(
+    WIN_MAIN_RENDERER_EVENT_NAME.sync_action,
+    { action: 'musicFile_compare' },
+  )
+}
+
+/**
+ * 本地音乐文件同步：执行勾选的传输动作
+ */
+export const musicFileApply = (selection: LX.Sync.MusicFile.Selection) => {
+  return rendererInvoke<LX.Sync.SyncServiceActions, LX.Sync.MusicFile.ApplyResult>(
+    WIN_MAIN_RENDERER_EVENT_NAME.sync_action,
+    { action: 'musicFile_apply', data: selection },
+  )
+}
+
+/**
+ * 本地音乐文件同步：取消正在进行的同步
+ */
+export const musicFileCancel = () => {
+  return rendererInvoke<LX.Sync.SyncServiceActions, void>(
+    WIN_MAIN_RENDERER_EVENT_NAME.sync_action,
+    { action: 'musicFile_cancel' },
+  )
+}
+
 
 // export const refreshSyncCode = async(): Promise<string> => {
 //   return rendererInvoke(WIN_MAIN_RENDERER_EVENT_NAME.sync_generate_code)

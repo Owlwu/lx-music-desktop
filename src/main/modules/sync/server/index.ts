@@ -5,4 +5,5 @@ export {
   generateCode,
   getDevices,
   removeDevice,
+  getReadyClientSockets,
 } from './server'

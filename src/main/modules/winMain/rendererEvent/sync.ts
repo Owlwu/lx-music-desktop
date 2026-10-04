@@ -10,6 +10,10 @@ import {
   getClientStatus,
   getServerDevices,
   removeServerDevice,
+  musicFileApply,
+  musicFileCancel,
+  musicFileCompare,
+  musicFileGetConfig,
 } from '@main/modules/sync'
 import { sendEvent } from '../main'
 
@@ -34,6 +38,12 @@ export default () => {
           selectModeListenr = null
         }
         break
+      case 'musicFile_get_config': return musicFileGetConfig()
+      case 'musicFile_compare': return musicFileCompare()
+      case 'musicFile_apply': return musicFileApply(data.data)
+      case 'musicFile_cancel':
+        musicFileCancel()
+        return
       default:
         break
     }

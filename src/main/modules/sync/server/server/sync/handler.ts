@@ -3,15 +3,15 @@
 import { FeaturesList } from '../../../../../../common/constants_sync'
 import { modules } from '../../modules'
 
-const handler: LX.Sync.ServerSyncHandlerActions<LX.Sync.Server.Socket> = {
+const handler: LX.Sync.ServerSyncHandlerFeatureActions<LX.Sync.Server.Socket> = {
   async onFeatureChanged(socket, feature) {
     // const userSpace = getUserSpace(socket.userInfo.name)
-    const beforeFeature = socket.feature
+    const target = socket.feature as Partial<Record<keyof LX.Sync.EnabledFeatures, LX.Sync.EnabledFeatures[keyof LX.Sync.EnabledFeatures]>>
 
     for (const name of FeaturesList) {
       const newStatus = feature[name]
       if (newStatus == null) continue
-      beforeFeature[name] = feature[name]
+      target[name] = newStatus
       socket.moduleReadys[name] = false
       if (feature[name]) await modules[name].sync(socket).catch(_ => _)
     }

@@ -239,6 +239,7 @@ export const connect = (urlInfo: LX.Sync.Client.UrlInfo, keyInfo: LX.Sync.Client
     client!.moduleReadys = {
       list: false,
       dislike: false,
+      musicFile: false,
     }
     disconnected = false
     sendSyncStatus({
@@ -292,3 +293,6 @@ export const disconnect = async() => {
 }
 
 export const getStatus = (): LX.Sync.ClientStatus => status
+
+/** 当前持有的客户端连接（未连接时为 null），供本地音乐文件同步等模块使用 */
+export const getSocket = () => client

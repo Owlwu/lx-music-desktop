@@ -16,6 +16,7 @@ declare global {
           moduleReadys: {
             list: boolean
             dislike: boolean
+            musicFile: boolean
           }
 
           onClose: (handler: (err: Error) => (void | Promise<void>)) => () => void
@@ -41,6 +42,7 @@ declare global {
           moduleReadys: {
             list: boolean
             dislike: boolean
+            musicFile: boolean
           }
 
           onClose: (handler: (err: Error) => (void | Promise<void>)) => () => void

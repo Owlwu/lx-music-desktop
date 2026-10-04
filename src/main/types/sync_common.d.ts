@@ -4,10 +4,29 @@ type WarpSyncHandlerActions<Socket, Actions> = {
 
 declare namespace LX {
   namespace Sync {
+    /**
+     * 本地音乐文件同步：两种角色都暴露同一组方法给对方调用。
+     * 传输由用户在任一端手动发起，握手阶段不做任何文件读写。
+     */
+    interface MusicFilePeerActions {
+      musicFile_get_root: () => string
+      musicFile_get_index: () => LX.Sync.MusicFile.FileIndex
+      musicFile_read_file: (path: string, offset: number, size: number) => LX.Sync.MusicFile.ReadFileResult
+      musicFile_write_file: (path: string, offset: number, data: string, isLast: boolean) => void
+    }
+
     type ServerSyncActions = WarpPromiseRecord<{
       onFeatureChanged: (feature: EnabledFeatures) => void
-    }>
+    } & MusicFilePeerActions>
     type ServerSyncHandlerActions<Socket> = WarpSyncHandlerActions<Socket, ServerSyncActions>
+
+    /** 服务端只负责特性协商的那部分（文件读写由各 feature 模块自己实现） */
+    type ServerSyncHandlerFeatureActions<Socket> = WarpSyncHandlerActions<Socket, WarpPromiseRecord<{
+      onFeatureChanged: (feature: EnabledFeatures) => void
+    }>>
+
+    /** 服务端暴露给客户端的本地音乐文件同步方法 */
+    type ServerSyncHandlerMusicFilePeerActions<Socket> = WarpSyncHandlerActions<Socket, WarpPromiseRecord<MusicFilePeerActions>>
 
     type ServerSyncListActions = WarpPromiseRecord<{
       onListSyncAction: (action: LX.Sync.List.ActionList) => void
@@ -22,8 +41,22 @@ declare namespace LX {
     type ClientSyncActions = WarpPromiseRecord<{
       getEnabledFeatures: (serverType: ServerType, supportedFeatures: SupportedFeatures) => EnabledFeatures
       finished: () => void
-    }>
+      musicFile_sync_finished: () => void
+    } & MusicFilePeerActions>
     type ClientSyncHandlerActions<Socket> = WarpSyncHandlerActions<Socket, ClientSyncActions>
+
+    /** 客户端只负责特性协商的那部分（finished 由 client.ts 内部实现） */
+    type ClientSyncHandlerFeatureActions<Socket> = WarpSyncHandlerActions<Socket, WarpPromiseRecord<{
+      getEnabledFeatures: (serverType: ServerType, supportedFeatures: SupportedFeatures) => EnabledFeatures
+      finished: () => void
+    }>>
+
+    type ClientSyncMusicFileActions = WarpPromiseRecord<MusicFilePeerActions & {
+      musicFile_sync_finished: () => void
+    }>
+    type ClientSyncHandlerMusicFileActions<Socket> = WarpSyncHandlerActions<Socket, ClientSyncMusicFileActions>
+
+    type ClientSyncHandlerMusicFilePeerActions<Socket> = WarpSyncHandlerActions<Socket, WarpPromiseRecord<MusicFilePeerActions>>
 
     type ClientSyncListActions = WarpPromiseRecord<{
       onListSyncAction: (action: LX.Sync.List.ActionList) => void

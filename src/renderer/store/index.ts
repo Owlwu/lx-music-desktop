@@ -46,6 +46,9 @@ export const sync: {
       address: string[]
     }
   }
+  musicFile: {
+    progress: LX.Sync.MusicFile.Progress
+  }
 } = reactive({
   enable: false,
   mode: 'server',
@@ -69,6 +72,22 @@ export const sync: {
       status: false,
       message: '',
       address: [],
+    },
+  },
+  musicFile: {
+    progress: {
+      running: false,
+      stage: 'idle',
+      kind: '',
+      path: '',
+      actionIndex: 0,
+      actionTotal: 0,
+      fileBytes: 0,
+      fileBytesTotal: 0,
+      totalBytes: 0,
+      doneBytes: 0,
+      message: '',
+      errors: [],
     },
   },
 })

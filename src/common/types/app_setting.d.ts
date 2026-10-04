@@ -665,6 +665,11 @@ declare global {
        */
       'sync.client.host': string
 
+      /**
+       * 本地音乐文件同步：同步歌曲存放路径（本机绝对路径）
+       */
+      'sync.musicFile.root': string
+
 
       /**
        * 是否启用开放API服务

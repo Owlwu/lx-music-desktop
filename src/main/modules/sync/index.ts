@@ -19,6 +19,15 @@ export {
   getStatus as getClientStatus,
 } from './client'
 
+export {
+  apply as musicFileApply,
+  cancel as musicFileCancel,
+  compare as musicFileCompare,
+  getConfig as musicFileGetConfig,
+  getProgress as musicFileGetProgress,
+  getPeerDeviceName as musicFileGetPeerDeviceName,
+} from './musicFile'
+
 export default () => {
   global.lx.event_app.on('main_window_close', () => {
     if (global.lx.appSetting['sync.mode'] == 'server') {

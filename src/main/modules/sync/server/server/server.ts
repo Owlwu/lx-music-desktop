@@ -159,10 +159,12 @@ const handleStartServer = async(port = 9527, ip = '0.0.0.0') => await new Promis
     socket.moduleReadys = {
       list: false,
       dislike: false,
+      musicFile: false,
     }
     socket.feature = {
       list: false,
       dislike: false,
+      musicFile: false,
     }
     socket.on('pong', () => {
       socket.isAlive = true
@@ -392,6 +394,9 @@ export const startServer = async(port: number) => {
 }
 
 export const getStatus = (): LX.Sync.ServerStatus => status
+
+/** 已就绪的客户端连接，供本地音乐文件同步等模块使用 */
+export const getReadyClientSockets = (): LX.Sync.Server.Socket[] => wss ? [...wss.clients].filter(client => client.isReady) : []
 
 export const generateCode = async() => {
   status.code = handleGenerateCode()

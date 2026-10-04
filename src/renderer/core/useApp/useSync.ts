@@ -31,6 +31,9 @@ export default () => {
           if (!sync.isShowAuthCodeModal) sync.isShowAuthCodeModal = true
         } else if (sync.isShowAuthCodeModal) sync.isShowAuthCodeModal = false
         break
+      case 'musicFile_progress':
+        sync.musicFile.progress = event.data
+        break
     }
   }
 

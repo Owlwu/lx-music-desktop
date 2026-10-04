@@ -52,6 +52,7 @@ export const TRANS_MODE: Readonly<Record<LX.Sync.List.SyncMode, LX.Sync.List.Syn
 } as const
 
 export const File = {
+  syncDir: 'sync',
   serverDataPath: 'sync/server',
   clientDataPath: 'sync/client',
 
@@ -71,4 +72,5 @@ export const File = {
 export const FeaturesList = [
   'list',
   'dislike',
+  'musicFile',
 ] as const
