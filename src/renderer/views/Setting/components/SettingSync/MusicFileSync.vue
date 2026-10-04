@@ -153,6 +153,7 @@ export default {
       const parts = []
       if (item.localSize != null) parts.push(`${t('setting__sync_music_file_local')} ${formatSize(item.localSize)}`)
       if (item.remoteSize != null) parts.push(`${t('setting__sync_music_file_remote')} ${formatSize(item.remoteSize)}`)
+      if (item.localHasLyric || item.remoteHasLyric) parts.push(t('setting__sync_music_file_has_lyric'))
       return parts.join(' · ')
     }
 

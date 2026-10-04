@@ -1,9 +1,14 @@
+import fs from 'node:fs'
 import fsp from 'node:fs/promises'
 import path from 'node:path'
 import {
   assertSafeRelPath,
   buildIndex,
+  getLyricRelPath,
+  getRelDir,
   isAudioFileName,
+  isLyricFileName,
+  normalizeRelPath,
   type FileIndex,
   type ScanEntry,
 } from './diff'
@@ -36,7 +41,7 @@ const readDirEntries = async(dirPath: string) => {
   }
 }
 
-/** 扫描 scope 内所有文件夹下的音频文件（返回原始条目，由 buildIndex 完成整理） */
+/** 扫描 scope 内所有文件夹下的音频与歌词文件（返回原始条目，由 buildIndex 完成配对） */
 export const scanEntries = async(root: string, scope: readonly string[] = getScope()): Promise<ScanEntry[]> => {
   const entries: ScanEntry[] = []
   const walk = async(absDir: string, relDir: string, depth: number) => {
@@ -52,7 +57,7 @@ export const scanEntries = async(root: string, scope: readonly string[] = getSco
         continue
       }
       if (!dirent.isFile()) continue
-      if (!isAudioFileName(name)) continue
+      if (!isAudioFileName(name) && !isLyricFileName(name)) continue
       try {
         const stat = await fsp.stat(path.join(absDir, name))
         entries.push({ path: relPath, size: stat.size, mtime: stat.mtimeMs })
@@ -125,25 +130,32 @@ export const writeFileChunk = async(root: string, relPath: string, offset: numbe
   void isLast
 }
 
-export const rootExists = async(root: string) => {
-  if (!root) return false
-  try {
-    const stat = await fsp.stat(root)
-    return stat.isDirectory()
-  } catch {
-    return false
-  }
+/** 删除文件；withLyric 为真时同时删除伴生 .lrc */
+export const deleteFileWithLyric = async(root: string, relPath: string, withLyric: boolean) => {
+  const absPath = toAbsPath(root, relPath)
+  await removeIfExists(absPath)
+  if (withLyric) await removeIfExists(toAbsPath(root, getLyricRelPath(relPath)))
 }
 
-/** 删除文件 */
-export const deleteFile = async(root: string, relPath: string) => {
-  await removeIfExists(toAbsPath(root, relPath))
-}
+/** 读取本机某个相对路径对应的绝对路径（仅用于日志/展示） */
+export const describePath = (root: string, relPath: string) => path.join(root, ...normalizeRelPath(relPath).split('/'))
+
+export const relDirOf = getRelDir
 
 const removeIfExists = async(absPath: string) => {
   try {
     await fsp.unlink(absPath)
   } catch (err: any) {
     if (err?.code !== 'ENOENT') throw err
+  }
+}
+
+export const rootExists = async(root: string) => {
+  if (!root) return false
+  try {
+    const stat = await fs.promises.stat(root)
+    return stat.isDirectory()
+  } catch {
+    return false
   }
 }

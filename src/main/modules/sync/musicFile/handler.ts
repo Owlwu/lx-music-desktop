@@ -33,9 +33,9 @@ const handler: LX.Sync.ClientSyncHandlerMusicFilePeerActions<HandlerSocket> = {
     await writeChunk(path, offset, data, isLast)
   },
 
-  async musicFile_delete_file(socket, path) {
+  async musicFile_delete_file(socket, path, withLyric) {
     assertReady(socket)
-    await removeFile(path)
+    await removeFile(path, withLyric)
   },
 }
 
