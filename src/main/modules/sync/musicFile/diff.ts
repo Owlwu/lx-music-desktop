@@ -92,6 +92,24 @@ export const getRelDir = (relPath: string) => {
   return index === -1 ? '' : relPath.substring(0, index)
 }
 
+/** scope 为空表示根目录全部；否则文件所在文件夹必须等于或位于某个已选文件夹之下 */
+export const isPathInScope = (relPath: string, scope: readonly string[]) => {
+  if (!scope.length) return true
+  const dir = getRelDir(relPath)
+  return scope.some(folder => dir === folder || dir.startsWith(folder + '/'))
+}
+
+/** 勾选某文件夹时，其所有子文件夹也一并纳入（用于 UI 树与结果展示） */
+export const normalizeScope = (scope: readonly string[]) => {
+  const list = Array.from(new Set(scope.map(normalizeRelPath).filter(folder => folder.length && isSafeRelPath(folder))))
+  const result: string[] = []
+  for (const folder of list.sort()) {
+    if (result.some(parent => folder === parent || folder.startsWith(parent + '/'))) continue
+    result.push(folder)
+  }
+  return result
+}
+
 /** 由扫描结果构建索引：只保留音频文件 */
 export const buildIndex = (entries: readonly ScanEntry[]): FileIndex => {
   const folderSet = new Set<string>()

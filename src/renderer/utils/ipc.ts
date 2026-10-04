@@ -820,6 +820,16 @@ export const musicFileGetConfig = () => {
 }
 
 /**
+ * 本地音乐文件同步：读取同步根目录下的文件夹树
+ */
+export const musicFileGetFolders = () => {
+  return rendererInvoke<LX.Sync.SyncServiceActions, LX.Sync.MusicFile.FolderNode[]>(
+    WIN_MAIN_RENDERER_EVENT_NAME.sync_action,
+    { action: 'musicFile_get_folders' },
+  )
+}
+
+/**
  * 本地音乐文件同步：扫描两端并生成变更清单
  */
 export const musicFileCompare = () => {

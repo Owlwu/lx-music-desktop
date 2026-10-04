@@ -14,6 +14,7 @@ import {
   musicFileCancel,
   musicFileCompare,
   musicFileGetConfig,
+  musicFileGetFolders,
 } from '@main/modules/sync'
 import { sendEvent } from '../main'
 
@@ -39,6 +40,7 @@ export default () => {
         }
         break
       case 'musicFile_get_config': return musicFileGetConfig()
+      case 'musicFile_get_folders': return musicFileGetFolders()
       case 'musicFile_compare': return musicFileCompare()
       case 'musicFile_apply': return musicFileApply(data.data)
       case 'musicFile_cancel':

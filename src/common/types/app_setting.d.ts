@@ -670,6 +670,11 @@ declare global {
        */
       'sync.musicFile.root': string
 
+      /**
+       * 本地音乐文件同步：已勾选的同步文件夹（相对歌曲存放路径），空数组表示根目录全部
+       */
+      'sync.musicFile.scope': string[]
+
 
       /**
        * 是否启用开放API服务

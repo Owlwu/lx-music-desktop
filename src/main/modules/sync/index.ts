@@ -24,6 +24,7 @@ export {
   cancel as musicFileCancel,
   compare as musicFileCompare,
   getConfig as musicFileGetConfig,
+  getFolders as musicFileGetFolders,
   getProgress as musicFileGetProgress,
   getPeerDeviceName as musicFileGetPeerDeviceName,
 } from './musicFile'

@@ -6,6 +6,8 @@ dd#sync_music_file
     p(:class="$style.path") {{ root || $t('setting__sync_music_file_root_empty') }}
     div
       base-btn.btn(min @click="handleSelectRoot") {{ $t('setting__sync_music_file_root_btn') }}
+      base-btn.btn(min :disabled="!root" @click="handleOpenScope") {{ $t('setting__sync_music_file_scope_btn') }}
+    p.small(:class="$style.scopeSummary") {{ scopeSummary }}
     p.small(v-if="remoteRoot" :class="$style.remoteRoot") {{ $t('setting__sync_music_file_remote_root', { path: remoteRoot }) }}
     p.small {{ $t('setting__sync_music_file_connect_tip') }}
     div(:class="$style.actions")
@@ -37,6 +39,7 @@ dd#sync_music_file
               span(:class="$style.itemText")
                 span(:class="$style.itemPath") {{ item.path }}
                 span(:class="$style.itemMeta") {{ itemMeta(item) }}
+    MusicFileScopeModal(v-model="isShowScope" :folders="folders" :scope="scope" @update:scope="handleScopeChange")
 </template>
 
 <script>
@@ -47,9 +50,11 @@ import {
   musicFileApply,
   musicFileCancel,
   musicFileCompare,
+  musicFileGetFolders,
   showSelectDialog,
 } from '@renderer/utils/ipc'
 import { useI18n } from '@renderer/plugins/i18n'
+import MusicFileScopeModal from './MusicFileScopeModal.vue'
 
 const GROUP_KEYS = ['remoteAdded', 'localAdded']
 
@@ -63,9 +68,14 @@ const formatSize = (bytes) => {
 
 export default {
   name: 'SettingSyncMusicFile',
+  components: {
+    MusicFileScopeModal,
+  },
   setup() {
     const t = useI18n()
 
+    const folders = ref([])
+    const isShowScope = ref(false)
     const plan = ref(null)
     const remoteRoot = ref('')
     const busy = ref(false)
@@ -76,9 +86,17 @@ export default {
     })
 
     const root = computed(() => appSetting['sync.musicFile.root'] ?? '')
+    const scope = computed(() => appSetting['sync.musicFile.scope'] ?? [])
     const progress = computed(() => sync.musicFile.progress)
     const isConnected = computed(() => sync.mode === 'server' ? sync.server.status.status : sync.client.status.status)
     const canOperate = computed(() => !!root.value && isConnected.value)
+
+    const scopeSummary = computed(() => {
+      if (!root.value) return t('setting__sync_music_file_scope_summary_empty')
+      return scope.value.length
+        ? t('setting__sync_music_file_scope_summary_part', { count: scope.value.length })
+        : t('setting__sync_music_file_scope_summary_all')
+    })
 
     const selectionKey = (item) => `${item.group}:${item.path}`
 
@@ -167,7 +185,32 @@ export default {
       })
       if (canceled || !filePaths.length) return
       resetPlan()
-      updateSetting({ 'sync.musicFile.root': filePaths[0] })
+      folders.value = []
+      // 换根目录后原来的相对范围不再适用
+      updateSetting({ 'sync.musicFile.root': filePaths[0], 'sync.musicFile.scope': [] })
+    }
+
+    const loadFolders = async() => {
+      busy.value = true
+      errorText.value = ''
+      try {
+        folders.value = await musicFileGetFolders()
+      } catch (err) {
+        errorText.value = err?.message ?? String(err)
+        folders.value = []
+      } finally {
+        busy.value = false
+      }
+    }
+
+    const handleOpenScope = async() => {
+      await loadFolders()
+      isShowScope.value = true
+    }
+
+    const handleScopeChange = (value) => {
+      resetPlan()
+      updateSetting({ 'sync.musicFile.scope': value })
     }
 
     const handleCompare = async() => {
@@ -208,10 +251,16 @@ export default {
     watch(root, () => {
       resetPlan()
     })
+    watch(scope, () => {
+      resetPlan()
+    })
 
     return {
       appSetting,
       root,
+      scope,
+      folders,
+      isShowScope,
       plan,
       remoteRoot,
       busy,
@@ -219,6 +268,7 @@ export default {
       selection,
       progress,
       canOperate,
+      scopeSummary,
       groupList,
       planSummary,
       progressPercent,
@@ -229,6 +279,8 @@ export default {
       setGroupChecked,
       setChecked,
       handleSelectRoot,
+      handleOpenScope,
+      handleScopeChange,
       handleCompare,
       handleApply,
       handleCancel,
@@ -246,6 +298,10 @@ export default {
   word-break: break-all;
   line-height: 1.3;
   margin-bottom: 6px;
+}
+
+.scopeSummary {
+  margin-top: 4px;
 }
 
 .remoteRoot {

@@ -40,6 +40,7 @@ declare namespace LX {
     | SyncAction<'enable_server', EnableServer>
     | SyncAction<'enable_client', EnableClient>
     | SyncAction<'musicFile_get_config'>
+    | SyncAction<'musicFile_get_folders'>
     | SyncAction<'musicFile_compare'>
     | SyncAction<'musicFile_apply', MusicFile.Selection>
     | SyncAction<'musicFile_cancel'>

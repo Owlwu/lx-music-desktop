@@ -4,7 +4,7 @@ import { getReadyClientSockets } from '../server/server'
 /** 本地音乐文件同步只需要这几个远端方法，两种角色的 socket.remote 都具备 */
 export interface MusicFilePeer {
   musicFile_get_root: () => Promise<string>
-  musicFile_get_index: () => Promise<LX.Sync.MusicFile.FileIndex>
+  musicFile_get_index: (scope: string[]) => Promise<LX.Sync.MusicFile.FileIndex>
   musicFile_read_file: (path: string, offset: number, size: number) => Promise<LX.Sync.MusicFile.ReadFileResult>
   musicFile_write_file: (path: string, offset: number, data: string, isLast: boolean) => Promise<void>
 }

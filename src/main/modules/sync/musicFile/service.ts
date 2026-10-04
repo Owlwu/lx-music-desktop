@@ -3,6 +3,7 @@ import {
   buildActions,
   buildPlan,
   MUSIC_FILE_CHUNK_SIZE,
+  normalizeScope,
   type TransferAction,
 } from './diff'
 import * as localFs from './localFs'
@@ -36,29 +37,37 @@ export const getProgress = () => ({ ...progress })
 
 export const getConfig = (): LX.Sync.MusicFile.Config => ({
   root: localFs.getRootPath(),
+  scope: localFs.getScope(),
 })
 
-const requirePeer = async(): Promise<{ peer: MusicFilePeer, root: string }> => {
+export const getFolders = async() => {
+  const root = localFs.getRootPath()
+  if (!root) throw new Error('未设置同步歌曲存放路径')
+  if (!await localFs.rootExists(root)) throw new Error('同步歌曲存放路径不存在')
+  return localFs.scanFolderTree(root)
+}
+
+const requirePeer = async(): Promise<{ peer: MusicFilePeer, root: string, scope: string[] }> => {
   if (running) throw new Error('同步正在进行中')
   const peer = getPeer()
   if (!peer) throw new Error('未连接到对端设备，或对端版本不支持本地音乐同步')
   const root = localFs.getRootPath()
   if (!root) throw new Error('未设置同步歌曲存放路径')
   if (!await localFs.rootExists(root)) throw new Error('同步歌曲存放路径不存在')
-  return { peer, root }
+  return { peer, root, scope: normalizeScope(localFs.getScope()) }
 }
 
 /** 扫描两端并生成变更清单 */
 export const compare = async(): Promise<LX.Sync.MusicFile.CompareResult> => {
-  const { peer, root } = await requirePeer()
+  const { peer, root, scope } = await requirePeer()
   running = true
   updateProgress({ ...createProgress(), running: true, stage: 'comparing', message: '正在扫描本地文件…' })
   try {
-    const localIndex = await localFs.scanIndex(root)
+    const localIndex = await localFs.scanIndex(root, scope)
     updateProgress({ message: '正在读取对端文件列表…' })
     const remoteRoot = await peer.musicFile_get_root()
     if (!remoteRoot) throw new Error('对端未设置同步歌曲存放路径')
-    const remoteIndex = await peer.musicFile_get_index()
+    const remoteIndex = await peer.musicFile_get_index(scope)
     const plan = buildPlan(localIndex, remoteIndex, [])
     return { plan, localRoot: root, remoteRoot }
   } finally {
@@ -97,16 +106,16 @@ const transferUploadFile = async(peer: MusicFilePeer, root: string, relPath: str
 
 /** 执行用户在清单中勾选的传输动作 */
 export const apply = async(selection: LX.Sync.MusicFile.Selection): Promise<LX.Sync.MusicFile.ApplyResult> => {
-  const { peer, root } = await requirePeer()
+  const { peer, root, scope } = await requirePeer()
   running = true
   cancelled = false
   const result: LX.Sync.MusicFile.ApplyResult = { downloaded: 0, uploaded: 0, errors: [] }
   try {
     updateProgress({ ...createProgress(), running: true, stage: 'comparing', message: '正在重新核对文件列表…' })
-    const localIndex = await localFs.scanIndex(root)
+    const localIndex = await localFs.scanIndex(root, scope)
     const remoteRoot = await peer.musicFile_get_root()
     if (!remoteRoot) throw new Error('对端未设置同步歌曲存放路径')
-    const remoteIndex = await peer.musicFile_get_index()
+    const remoteIndex = await peer.musicFile_get_index(scope)
     const plan = buildPlan(localIndex, remoteIndex, [])
     const actions = buildActions(plan, selection.checked, selection.direction)
     const totalBytes = actions.reduce((sum, action) => sum + ('size' in action ? action.size : 0), 0)
@@ -174,8 +183,8 @@ export const cancel = () => {
 /** 协议：返回本机根目录（供对端展示） */
 export const getRoot = () => localFs.getRootPath()
 
-/** 协议：扫描本机索引 */
-export const getIndex = async() => localFs.scanIndex(localFs.getRootPath())
+/** 协议：按 scope 扫描本机索引 */
+export const getIndex = async(scope: string[]) => localFs.scanIndex(localFs.getRootPath(), normalizeScope(scope ?? []))
 
 /** 协议：读取本机文件分片 */
 export const readChunk = async(relPath: string, offset: number, size: number) => localFs.readFileChunk(localFs.getRootPath(), relPath, offset, size)

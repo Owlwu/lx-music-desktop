@@ -4,6 +4,7 @@ export {
   cancel,
   compare,
   getConfig,
+  getFolders,
   getProgress,
 } from './service'
 export { getPeerDeviceName } from './peer'
