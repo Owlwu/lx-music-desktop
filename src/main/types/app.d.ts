@@ -17,6 +17,10 @@ interface Lx {
    */
   isSkipTrayQuit: boolean
   /**
+   * 是否把同步过程的诊断日志写入日志文件（设置 → 其他 → 日志）
+   */
+  isEnableSyncLog: boolean
+  /**
    * main window 是否关闭
    */
   // mainWindowClosed: boolean

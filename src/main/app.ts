@@ -24,6 +24,7 @@ export const initGlobalData = () => {
   global.lx = {
     inited: false,
     isSkipTrayQuit: false,
+    isEnableSyncLog: false,
     // mainWindowClosed: true,
     event_app: createAppEvent(),
     event_list: createListEvent(),
