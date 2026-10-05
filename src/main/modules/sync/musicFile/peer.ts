@@ -1,5 +1,4 @@
 import { getSocket } from '../client/client'
-import { getReadyClientSockets } from '../server/server'
 
 /** 本地音乐文件同步只需要这几个远端方法，两种角色的 socket.remote 都具备 */
 export interface MusicFilePeer {
@@ -8,6 +7,26 @@ export interface MusicFilePeer {
   musicFile_read_file: (path: string, offset: number, size: number) => Promise<LX.Sync.MusicFile.ReadFileResult>
   musicFile_write_file: (path: string, offset: number, data: string, isLast: boolean) => Promise<void>
   musicFile_delete_file: (path: string, withLyric: boolean) => Promise<void>
+}
+
+interface ReadyClientSocket {
+  moduleReadys?: { musicFile?: boolean }
+  remote: MusicFilePeer
+  keyInfo: { deviceName: string }
+}
+
+/**
+ * 服务端已就绪的客户端连接列表，延迟到调用时才解析。
+ *
+ * `../server/server` 会经由 server 的 modules 间接加载本文件
+ * （`server/modules/index.ts` 在模块初始化阶段就读取文件同步的 handler），
+ * 若在模块顶层静态导入它就会形成初始化环，导致启动时报
+ * `Cannot access 'musicFile_handler' before initialization`。
+ * 这里只在真正需要时才 require，保证模块图先完成初始化。
+ */
+const getReadyClientSockets = (): ReadyClientSocket[] => {
+  const server = require('../server/server') as typeof import('../server/server')
+  return server.getReadyClientSockets() as unknown as ReadyClientSocket[]
 }
 
 /**
