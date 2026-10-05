@@ -8,6 +8,9 @@ dd#sync_music_file
       base-btn.btn(min @click="handleSelectRoot") {{ $t('setting__sync_music_file_root_btn') }}
       base-btn.btn(min :disabled="!root" @click="handleOpenScope") {{ $t('setting__sync_music_file_scope_btn') }}
     p.small(:class="$style.scopeSummary") {{ scopeSummary }}
+    div(:class="$style.actions")
+      base-btn.btn(min :disabled="!root" @click="handleExportScope") {{ $t('setting__sync_music_file_scope_export') }}
+      base-btn.btn(min :disabled="!root" @click="handleImportScope") {{ $t('setting__sync_music_file_scope_import') }}
     p.small(v-if="remoteRoot" :class="$style.remoteRoot") {{ $t('setting__sync_music_file_remote_root', { path: remoteRoot }) }}
     p.small {{ $t('setting__sync_music_file_connect_tip') }}
     div(:class="$style.actions")
@@ -61,12 +64,31 @@ import {
   musicFileCancel,
   musicFileCompare,
   musicFileGetFolders,
+  openSaveDir,
   showSelectDialog,
 } from '@renderer/utils/ipc'
 import { useI18n } from '@renderer/plugins/i18n'
+import { dialog } from '@renderer/plugins/Dialog'
 import MusicFileScopeModal from './MusicFileScopeModal.vue'
 
+/** 导出文件的格式版本，后续若结构变化可据此兼容 */
+const SCOPE_FILE_VERSION = 1
+
 const GROUP_KEYS = ['remoteAdded', 'localAdded', 'remoteDeleted', 'localDeleted', 'conflict']
+
+/**
+ * 把 scope 规整为「相对路径数组」：统一分隔符、去掉首尾多余的 `/`、去重。
+ * 导入的旧文件可能用 `\` 或用尾随 `/`，这里一并归一，避免与扫描结果对不上。
+ */
+const normalizeScopeList = (value) => {
+  if (!Array.isArray(value)) return []
+  return Array.from(new Set(
+    value
+      .filter(item => typeof item === 'string')
+      .map(item => item.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '').trim())
+      .filter(item => item.length),
+  ))
+}
 
 const formatSize = (bytes) => {
   if (bytes == null) return '-'
@@ -223,9 +245,111 @@ export default {
       isShowScope.value = true
     }
 
+    /**
+     * 导出同步范围。
+     *
+     * 刻意导出**明文 JSON**而不是项目备份用的 `.lxmc`：这里只是 699 条路径，
+     * `.lxmc` 是 gzip 二进制、记事本打开是乱码，而这份文件的实际用途就是
+     * 「看得懂、能改、能比对」，明文更合适。导入端两种格式都支持。
+     */
+    const handleExportScope = () => {
+      const current = normalizeScopeList(scope.value)
+      if (!current.length) {
+        void dialog({ message: t('setting__sync_music_file_scope_export_empty'), confirmButtonText: t('ok') })
+        return
+      }
+      void openSaveDir({
+        title: t('setting__sync_music_file_scope_export_desc'),
+        defaultPath: 'lx_music_file_scope.json',
+        filters: [
+          { name: 'JSON', extensions: ['json'] },
+          { name: 'All Files', extensions: ['*'] },
+        ],
+      }).then(result => {
+        if (result.canceled || !result.filePath) return
+        const content = JSON.stringify({
+          type: 'musicFileScope',
+          version: SCOPE_FILE_VERSION,
+          // 导出时的根目录，换机/重装后便于核对；导入时不强制一致
+          root: root.value,
+          exportedAt: new Date().toISOString(),
+          count: current.length,
+          scope: current,
+        }, null, 2)
+        void window.lx.worker.main.saveStrToFile(result.filePath, content)
+          .then(() => {
+            void dialog({ message: t('setting__sync_music_file_scope_export_ok', { count: current.length }), confirmButtonText: t('ok') })
+          })
+          .catch(() => {
+            void dialog({ message: t('setting__sync_music_file_scope_export_failed'), confirmButtonText: t('ok') })
+          })
+      })
+    }
+
+    /**
+     * 导入同步范围：覆盖当前选择，并提示在当前根目录下已不存在的条目。
+     * 同时接受本功能导出的明文 JSON 与项目备份的 `.lxmc` 两种格式。
+     */
+    const handleImportScope = () => {
+      void showSelectDialog({
+        title: t('setting__sync_music_file_scope_import_desc'),
+        properties: ['openFile'],
+        filters: [
+          { name: 'LX Music Sync Scope', extensions: ['json', 'lxmc'] },
+          { name: 'All Files', extensions: ['*'] },
+        ],
+      }).then(async result => {
+        if (result.canceled || !result.filePaths.length) return
+        let configData
+        try {
+          configData = await window.lx.worker.main.readLxConfigFile(result.filePaths[0])
+        } catch {
+          void dialog({ message: t('setting__sync_music_file_scope_import_failed'), confirmButtonText: t('ok') })
+          return
+        }
+        if (configData?.type !== 'musicFileScope') {
+          void dialog({ message: t('setting__sync_music_file_scope_import_failed'), confirmButtonText: t('ok') })
+          return
+        }
+        // 兼容两种写法：明文 JSON 直接放 scope；旧结构放在 data.scope
+        const imported = normalizeScopeList(configData.scope ?? configData.data?.scope)
+        if (!imported.length) {
+          void dialog({ message: t('setting__sync_music_file_scope_import_failed'), confirmButtonText: t('ok') })
+          return
+        }
+        const confirmed = await dialog.confirm({
+          message: t('setting__sync_music_file_scope_import_confirm', { count: imported.length }),
+          cancelButtonText: t('cancel_button_text'),
+          confirmButtonText: t('confirm_button_text'),
+        })
+        if (!confirmed) return
+        // 统计在当前根目录下已不存在的条目；它们不会参与比较，提示一下更直观
+        let missing = 0
+        try {
+          const tree = await musicFileGetFolders()
+          const existing = new Set()
+          const collect = (nodes) => {
+            for (const node of nodes) {
+              existing.add(node.path)
+              collect(node.children ?? [])
+            }
+          }
+          collect(tree)
+          missing = imported.filter(item => !existing.has(item)).length
+        } catch {}
+        handleScopeChange(imported)
+        void dialog({
+          message: missing
+            ? t('setting__sync_music_file_scope_import_missing', { count: imported.length, missing })
+            : t('setting__sync_music_file_scope_import_ok', { count: imported.length }),
+          confirmButtonText: t('ok'),
+        })
+      })
+    }
+
     const handleScopeChange = (value) => {
       resetPlan()
-      updateSetting({ 'sync.musicFile.scope': value })
+      updateSetting({ 'sync.musicFile.scope': normalizeScopeList(value) })
     }
 
     const handleCompare = async() => {
@@ -298,6 +422,8 @@ export default {
       handleSelectRoot,
       handleOpenScope,
       handleScopeChange,
+      handleExportScope,
+      handleImportScope,
       handleCompare,
       handleApply,
       handleCancel,
