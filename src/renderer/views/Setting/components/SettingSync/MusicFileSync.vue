@@ -32,6 +32,9 @@ dd#sync_music_file
             :label="group.title + ' (' + group.items.length + ')'"
             @update:model-value="setGroupChecked(group.key, $event)"
           )
+          div(v-if="group.key === 'conflict'" :class="$style.groupActions")
+            button(:class="$style.dirBtn" @click="setGroupDirection(group.key, 'push')") {{ $t('setting__sync_music_file_use_local_all') }}
+            button(:class="$style.dirBtn" @click="setGroupDirection(group.key, 'pull')") {{ $t('setting__sync_music_file_use_remote_all') }}
         ul.scroll(:class="$style.list")
           li(v-for="item in group.items" :key="item.path" :class="$style.item")
             base-checkbox(
@@ -173,6 +176,7 @@ export default {
 
     const itemMeta = (item) => {
       const parts = []
+      if (item.sameSize) parts.push(t('setting__sync_music_file_content_diff'))
       if (item.localSize != null) parts.push(`${t('setting__sync_music_file_local')} ${formatSize(item.localSize)}`)
       if (item.remoteSize != null) parts.push(`${t('setting__sync_music_file_remote')} ${formatSize(item.remoteSize)}`)
       if (item.localHasLyric || item.remoteHasLyric) parts.push(t('setting__sync_music_file_has_lyric'))
@@ -213,6 +217,19 @@ export default {
     }
     const setGroupChecked = (key, value) => {
       for (const item of plan.value?.[key] ?? []) selection.checked[selectionKey(item)] = value
+    }
+    /**
+     * 冲突组批量指定方向，并顺手勾选该组。
+     *
+     * 冲突默认方向是「以远端为准」，而「字节数相同、内容不同」这类冲突里
+     * 往往是本机才是正确的一份；逐条点 74 次不现实，因此给整组一个入口。
+     */
+    const setGroupDirection = (key, value) => {
+      for (const item of plan.value?.[key] ?? []) {
+        const sk = selectionKey(item)
+        selection.direction[sk] = value
+        selection.checked[sk] = true
+      }
     }
 
     const handleSelectRoot = async() => {
@@ -417,6 +434,7 @@ export default {
       directionOf,
       groupAllChecked,
       setGroupChecked,
+      setGroupDirection,
       setChecked,
       setDirection,
       handleSelectRoot,
@@ -526,6 +544,14 @@ export default {
 .itemMeta {
   color: var(--color-font-label);
   font-size: 11px;
+}
+
+.groupActions {
+  margin-left: auto;
+  flex: none;
+  display: flex;
+  gap: 5px;
+  padding-left: 10px;
 }
 
 .direction {

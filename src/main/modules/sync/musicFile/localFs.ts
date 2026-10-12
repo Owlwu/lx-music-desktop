@@ -4,9 +4,11 @@ import path from 'node:path'
 import {
   assertSafeRelPath,
   buildIndex,
+  buildSignature,
   canonicalizeRelPath,
   getLyricRelPath,
   getRelDir,
+  getSignatureRanges,
   isAudioFileName,
   isLyricFileName,
   shortenRelPath,
@@ -92,6 +94,32 @@ const readDirEntries = async(dirPath: string) => {
   }
 }
 
+/**
+ * 读取首尾各 `SIGNATURE_SAMPLE_BYTES` 字节算内容签名（取样范围见 `getSignatureRanges`）。
+ *
+ * 目的：发现「字节数相同但内容不同」的文件（例如原地解密过的音频），
+ * 这类文件只看 size 会被永远判为「已同步」。失败时返回 undefined，
+ * 该文件退回只比 size 的旧判定，不影响同步可用性。
+ */
+const readSignature = async(absPath: string, size: number): Promise<string | undefined> => {
+  const { headLength, tailOffset, tailLength } = getSignatureRanges(size)
+  if (!headLength && !tailLength) return undefined
+  let handle: fsp.FileHandle | undefined
+  try {
+    handle = await fsp.open(absPath, 'r')
+    const head = Buffer.alloc(headLength)
+    if (headLength) await handle.read(head, 0, headLength, 0)
+    const tail = Buffer.alloc(tailLength)
+    if (tailLength) await handle.read(tail, 0, tailLength, tailOffset)
+    return buildSignature(size, head, tail)
+  } catch (err: any) {
+    log.warn('scan', `signature failed absPath=${absPath} err=${err?.message ?? err}`)
+    return undefined
+  } finally {
+    await handle?.close()
+  }
+}
+
 /** 扫描 scope 内所有文件夹下的音频与歌词文件（返回原始条目，由 buildIndex 完成配对） */
 export const scanEntries = async(root: string, scope: readonly string[] = getScope()): Promise<ScanEntry[]> => {
   const entries: ScanEntry[] = []
@@ -110,8 +138,12 @@ export const scanEntries = async(root: string, scope: readonly string[] = getSco
       if (!dirent.isFile()) continue
       if (!isAudioFileName(name) && !isLyricFileName(name)) continue
       try {
-        const stat = await fsp.stat(path.join(absDir, name))
-        entries.push({ path: relPath, size: stat.size, mtime: stat.mtimeMs })
+        const absPath = path.join(absDir, name)
+        const stat = await fsp.stat(absPath)
+        const entry: ScanEntry = { path: relPath, size: stat.size, mtime: stat.mtimeMs }
+        // 音频才算内容签名：歌词是伴生文件，不参与内容比对
+        if (isAudioFileName(name)) entry.sig = await readSignature(absPath, stat.size)
+        entries.push(entry)
       } catch (err: any) {
         // 文件在扫描过程中被删除等情况：忽略，但要留痕
         log.warn('scan', `stat failed during scan relPath=${relPath} abs=${path.join(absDir, name)} err=${err?.message ?? err}`)

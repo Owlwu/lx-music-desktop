@@ -9,6 +9,8 @@ import {
   buildPlan,
   buildActions,
   buildBaseline,
+  buildSignature,
+  getSignatureRanges,
   isSafeRelPath,
   isPathInScope,
   normalizeScope,
@@ -53,6 +55,9 @@ const file = (path: string, size: number, lyricSize: number | null = null): Scan
 }
 
 const indexOf = (...entries: ScanEntry[][]): FileIndex => buildIndex(entries.flat())
+
+/** 带内容签名的音频条目（size 相同、签名不同 = 内容不同） */
+const signed = (path: string, size: number, sig: string): ScanEntry[] => [{ path, size, mtime: 1000, sig }]
 
 const selected = (plan: PlanGroups, groups: Array<[keyof PlanGroups, string]>) => {
   const map: Record<string, boolean> = {}
@@ -169,6 +174,30 @@ const delPlan = buildPlan(
 )
 const delActions = buildActions(delPlan, { [planSelectionKey('remoteDeleted', 'b.flac')]: true }, {})
 check('删除本地时带上歌词', delActions, [{ kind: 'delete_local', path: 'b.flac', hasLyric: true }])
+
+console.log('\n== 内容签名：发现「字节数相同但内容不同」 ==')
+check('取样范围: 大文件首尾各 4096', getSignatureRanges(100000), { headLength: 4096, tailOffset: 95904, tailLength: 4096 })
+check('取样范围: 刚好 2 倍取样', getSignatureRanges(8192), { headLength: 4096, tailOffset: 4096, tailLength: 4096 })
+check('取样范围: 中间档不重叠', getSignatureRanges(5000), { headLength: 4096, tailOffset: 4096, tailLength: 904 })
+check('取样范围: 小文件取整文件', getSignatureRanges(100), { headLength: 100, tailOffset: 100, tailLength: 0 })
+check('取样范围: 空文件', getSignatureRanges(0), { headLength: 0, tailOffset: 0, tailLength: 0 })
+
+const sigA = buildSignature(5, new Uint8Array([1, 2, 3]), new Uint8Array([4, 5]))
+check('签名稳定（同输入同输出）', buildSignature(5, new Uint8Array([1, 2, 3]), new Uint8Array([4, 5])), sigA)
+check('签名长度 16', sigA.length, 16)
+check('尾部不同 -> 签名不同', buildSignature(5, new Uint8Array([1, 2, 3]), new Uint8Array([4, 6])) === sigA, false)
+check('头部不同 -> 签名不同', buildSignature(5, new Uint8Array([9, 2, 3]), new Uint8Array([4, 5])) === sigA, false)
+check('大小不同 -> 签名不同', buildSignature(6, new Uint8Array([1, 2, 3]), new Uint8Array([4, 5])) === sigA, false)
+
+check('索引携带签名', buildIndex(signed('a.flac', 10, sigA)).files[0].sig, sigA)
+check('size 相同 + 签名相同 -> 已同步', buildPlan(indexOf(signed('a.flac', 10, sigA)), indexOf(signed('a.flac', 10, sigA)), []).conflict.length, 0)
+const contentDiff = buildPlan(indexOf(signed('a.flac', 10, sigA)), indexOf(signed('a.flac', 10, 'ffffffffffffffff')), [])
+check('size 相同 + 签名不同 -> conflict', contentDiff.conflict.map(i => i.path), ['a.flac'])
+check('该 conflict 标记 sameSize', contentDiff.conflict[0].sameSize, true)
+check('size 不同的 conflict sameSize=false', buildPlan(indexOf(signed('a.flac', 10, sigA)), indexOf(signed('a.flac', 11, sigA)), []).conflict[0].sameSize, false)
+check('对端无签名 -> 退回只比 size', buildPlan(indexOf(signed('a.flac', 10, sigA)), indexOf(file('a.flac', 10)), []).conflict.length, 0)
+check('本端无签名 -> 退回只比 size', buildPlan(indexOf(file('a.flac', 10)), indexOf(signed('a.flac', 10, sigA)), []).conflict.length, 0)
+check('同大小不同内容的原文件不会因基线被跳过', buildPlan(indexOf(signed('a.flac', 10, sigA)), indexOf(signed('a.flac', 10, 'ffffffffffffffff')), ['a.flac']).conflict.map(i => i.path), ['a.flac'])
 
 console.log('\n== 基线更新 ==')
 const afterLocal = indexOf(file('a.flac', 100), file('c.flac', 300), file('d.flac', 400))

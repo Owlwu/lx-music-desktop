@@ -45,8 +45,16 @@ const mobileDiffSource = new URL('../../lx-music-mobile/src/plugins/sync/client/
 const stageModules = () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lx-music-file-sync-'))
   fs.copyFileSync(diffSource, path.join(dir, 'diff.ts'))
-  const localFsCode = fs.readFileSync(localFsSource, 'utf-8').replace("from './diff'", "from './diff.ts'")
+  const localFsCode = fs.readFileSync(localFsSource, 'utf-8')
+    .replace("from './diff'", "from './diff.ts'")
+    .replace("from './logger'", "from './logger.ts'")
   fs.writeFileSync(path.join(dir, 'localFs.ts'), localFsCode)
+  // logger 依赖应用内的日志模块，测试里用等价的空实现替代
+  fs.writeFileSync(path.join(dir, 'logger.ts'), [
+    'const noop = () => {}',
+    'export default { info: noop, warn: noop, err: noop, fatal: noop }',
+    '',
+  ].join('\n'))
   return dir
 }
 
@@ -224,6 +232,19 @@ const newBaseline = diff.buildBaseline(finalA, finalB)
 check('基线为两端交集', newBaseline, ['Yunomi/专辑/ghost.ogg', '歌手A/alpha.flac', '歌手A/beta.flac', '歌手B/android-only.mp3'])
 const nextPlan = diff.buildPlan(finalA, finalB, newBaseline)
 check('两端一致后清单为空', Object.values(nextPlan).flat().length, 0)
+
+console.log('\n== 同大小不同内容也能发现（内容签名） ==')
+// 把 PC 端的 ghost.ogg 换成「字节数完全相同、内容不同」的一份，
+// 模拟把加密/混淆过的音频原地解密（XOR 类解密前后字节数不变）的场景
+writeFile(rootA, 'Yunomi/专辑/ghost.ogg', 30_000, 42)
+const reScanA = await localFs.scanIndex(rootA, scopeAll)
+const sigOf = (index: any, path: string) => index.files.find((f: any) => f.path === path).sig
+check('两端签名确实不同', sigOf(reScanA, 'Yunomi/专辑/ghost.ogg') !== sigOf(finalB, 'Yunomi/专辑/ghost.ogg'), true)
+check('同大小不同内容 → 大小一致但判为冲突', reScanA.files.find((f: any) => f.path === 'Yunomi/专辑/ghost.ogg').size === finalB.files.find((f: any) => f.path === 'Yunomi/专辑/ghost.ogg').size, true)
+const contentPlan = diff.buildPlan(reScanA, finalB, newBaseline)
+check('冲突清单只含该文件', contentPlan.conflict.map((i: any) => i.path), ['Yunomi/专辑/ghost.ogg'])
+check('冲突被标记为 sameSize', contentPlan.conflict[0]?.sameSize, true)
+check('已在基线的文件不会被跳过', contentPlan.conflict.length, 1)
 
 console.log('\n== 相对路径安全 ==')
 await checkThrows('拒绝 ../ 逃逸', () => localFs.readFileChunk(rootA, '../secret.txt', 0, 100))
