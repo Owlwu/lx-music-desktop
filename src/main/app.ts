@@ -1,5 +1,5 @@
 import path from 'node:path'
-import { existsSync, mkdirSync, renameSync } from 'fs'
+import { existsSync, mkdirSync, renameSync, rmSync } from 'fs'
 import { app, shell, screen, nativeTheme, dialog } from 'electron'
 import { getProxy, getTheme, initHotKey, initSetting, parseEnvParams } from './utils'
 import { navigationUrlWhiteList } from '@common/config'
@@ -270,6 +270,15 @@ const backupDB = (backupPath: string) => {
   openDirInExplorer(backupPath)
 }
 
+const removeLegacyFiles = () => {
+  // 自定义音源功能已移除，清掉旧版本遗留的配置文件
+  for (const name of ['user_api.json']) {
+    try {
+      rmSync(path.join(global.lxDataPath, name), { force: true })
+    } catch {}
+  }
+}
+
 let isInitialized = false
 export const initAppSetting = async() => {
   if (!global.lx.inited) {
@@ -291,6 +300,7 @@ export const initAppSetting = async() => {
       backupDB(backupPath)
       dbFileExists = await global.lx.worker.dbService.init(global.lxDataPath)
     }
+    removeLegacyFiles()
     global.lx.appSetting = (await initSetting()).setting
     if (!dbFileExists) await migrateDBData().catch(err => { log.error(err) })
     initTheme()

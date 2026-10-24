@@ -12,7 +12,7 @@ export const getMusicUrl = async({ musicInfo, isRefresh }: {
   musicInfo: LX.Music.MusicInfo
   isRefresh?: boolean
 }): Promise<string> => {
-  const path = await getLocalFilePath(musicInfo as LX.Music.MusicInfoLocal)
+  const path = await getLocalFilePath(musicInfo)
   if (path) return encodePath(path)
 
   throw new Error('本地文件不存在')
@@ -24,11 +24,10 @@ export const getPicUrl = async({ musicInfo, listId, isRefresh }: {
   isRefresh?: boolean
 }): Promise<string> => {
   if (!isRefresh) {
-    const pic = await window.lx.worker.main.getMusicFilePic((musicInfo as LX.Music.MusicInfoLocal).meta.filePath)
+    const pic = await window.lx.worker.main.getMusicFilePic(musicInfo.meta.filePath)
     if (pic) return pic
 
-    const localInfo = musicInfo as LX.Music.MusicInfoLocal
-    if (localInfo.meta.picUrl) return localInfo.meta.picUrl
+    if (musicInfo.meta.picUrl) return musicInfo.meta.picUrl
   }
 
   return ''
@@ -39,7 +38,7 @@ export const getLyricInfo = async({ musicInfo, isRefresh }: {
   isRefresh?: boolean
 }): Promise<LX.Player.LyricInfo> => {
   if (!isRefresh) {
-    const [lyricInfo, fileLyricInfo] = await Promise.all([getCachedLyricInfo(musicInfo), window.lx.worker.main.getMusicFileLyric((musicInfo as LX.Music.MusicInfoLocal).meta.filePath)])
+    const [lyricInfo, fileLyricInfo] = await Promise.all([getCachedLyricInfo(musicInfo), window.lx.worker.main.getMusicFileLyric(musicInfo.meta.filePath)])
     // console.log(lyricInfo, fileLyricInfo)
     if (lyricInfo?.lyric && lyricInfo.lyric != fileLyricInfo?.lyric) {
       // 存在已编辑歌词
@@ -55,6 +54,6 @@ export const getLyricInfo = async({ musicInfo, isRefresh }: {
 
 // 本地歌曲的封面缓存更新（供后续在线匹配封面使用）
 export const updateLocalPic = (listId: string, musicInfo: LX.Music.MusicInfo, url: string) => {
-  (musicInfo as LX.Music.MusicInfoLocal).meta.picUrl = url
+  musicInfo.meta.picUrl = url
   void updateListMusics([{ id: listId, musicInfo }])
 }

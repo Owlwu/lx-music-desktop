@@ -72,7 +72,8 @@
 **SQLite 只在这里被访问**。调用方式像本地异步对象：
 - `init(dataPath)` → `true`（已存在）/`false`（新建）/`null`（结构校验失败）
 - 合并门面：`list`（`my_list` + `my_list_music_info`）、`lyric`（raw + edited）、`dislike_list`
-- 表结构仍包含历史表 `music_url` / `music_other_source` / `download`（无 DAO 使用，保留以免 `verifyDB` 重建）
+- 表结构（`DB_VERSION = '3'`）：`db_info`、`my_list`、`my_list_music_info`、`my_list_music_info_order`、
+  `lyric`、`dislike_list`；历史表已在 v3 迁移中删除。
 - 桥：`src/main/worker/utils/worker.ts`（`Comlink.expose`/`wrap`）
 - **渲染进程从不直接调用 `dbService`**，一律 IPC → 主进程 → `dbService`
 

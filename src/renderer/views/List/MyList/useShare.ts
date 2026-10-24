@@ -1,7 +1,7 @@
 import { toRaw } from '@common/utils/vueTools'
 import { openSaveDir, showSelectDialog } from '@renderer/utils/ipc'
 import { useI18n } from '@renderer/plugins/i18n'
-import { filterFileName, toNewMusicInfo, fixNewMusicInfoQuality, filterMusicList } from '@renderer/utils'
+import { filterFileName, convertLegacyMusicList } from '@renderer/utils'
 import { getListMusics, updateUserList, addListMusics, overwriteListMusics, createUserList } from '@renderer/store/list/action'
 import { defaultList, loveList, userLists } from '@renderer/store/list/state'
 import useImportTip from '@renderer/utils/compositions/useImportTip'
@@ -47,11 +47,11 @@ export default () => {
       switch (configData.type) {
         case 'playListPart':
           listData = configData.data
-          listData.list = filterMusicList(listData.list.map(m => toNewMusicInfo(m)))
+          listData.list = convertLegacyMusicList(listData.list)
           break
         case 'playListPart_v2':
           listData = configData.data
-          listData.list = filterMusicList(listData.list).map(m => fixNewMusicInfoQuality(m))
+          listData.list = convertLegacyMusicList(listData.list)
           break
         default:
           showImportTip(configData.type)
@@ -85,7 +85,7 @@ export default () => {
           }
           void overwriteListMusics({
             listId: listData.id,
-            musicInfos: listData.list.map(m => fixNewMusicInfoQuality(m)),
+            musicInfos: listData.list,
           })
           return
         }
@@ -98,7 +98,7 @@ export default () => {
         source: (listData as LX.List.UserListInfo).source,
         sourceListId: (listData as LX.List.UserListInfo).sourceListId,
       })
-      void addListMusics(listData.id, listData.list.map(m => fixNewMusicInfoQuality(m)))
+      void addListMusics(listData.id, listData.list)
     })
   }
 

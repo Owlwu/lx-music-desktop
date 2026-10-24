@@ -66,7 +66,8 @@
 - **`id` 就是文件绝对路径**；`meta.filePath` 与 `id` 同源（移动/改名会使记录失效）
 - `LX.Source = 'local'`（`LX.OnlineSource` 类型仍在，但不再有在线实现）
 - 歌词类型 `LX.Music.LyricInfo = { lyric, tlyric?, rlyric?, lxlyric? }`
-- 历史下载记录类型 `LX.Download.ListItem` 仍保留（旧数据可能含 `progress` 字段）
+- `LX.Music.MusicInfo` 即本地歌曲（`source: 'local'`），`MusicInfoLocal` 是等价别名；
+  `LX.Download`、`LX.Quality`、`LX.Music.MusicInfoOnline` 均已删除
 
 ## 请求与错误
 - 主进程请求：`httpFetch`（`src/main/utils/request.ts`，基于 `common/utils/request.ts` 的 undici 封装）

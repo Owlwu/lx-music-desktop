@@ -55,12 +55,7 @@
 //   // div.list-item(@click="handleListItemClick($event, index)" @contextmenu="handleListItemRightClick($event, index)"
 //   // :class="[{ selected: rightClickSelectedIndex == index }, { active: selectedList.includes(item) }]")
 //   // div.list-item-cell.nobreak.center(:style="{ width: rowWidth.r1 }" style="padding-left: 3px; padding-right: 3px;" :class="$style.noSelect" @click.stop) {{ index + 1 }}
-//   // div.list-item-cell.auto(:style="{ width: rowWidth.r2 }" :aria-label="item.name + (item.meta._qualitys.flac32bit ? ` - ${$t('tag__lossless_24bit')}` : (item.meta._qualitys.ape || item.meta._qualitys.flac || item.meta._qualitys.wav) ? ` - ${$t('tag__lossless')}` : item.meta._qualitys['320k'] ? ` - ${$t('tag__high_quality')}` : '') + (sourceTag ? ` - ${item.source}` : '')")
 //   //   span.select {{ item.name }}
-//   //   span.badge.badge-theme-primary(:class="[$style.labelQuality, $style.noSelect]" v-if="item.meta._qualitys.flac32bit") {{ $t('tag__lossless_24bit') }}
-//   //   span.badge.badge-theme-primary(:class="[$style.labelQuality, $style.noSelect]" v-else-if="item.meta._qualitys.ape || item.meta._qualitys.flac || item.meta._qualitys.wav") {{ $t('tag__lossless') }}
-//   //   span.badge.badge-theme-secondary(:class="[$style.labelQuality, $style.noSelect]" v-else-if="item.meta._qualitys['320k']") {{ $t('tag__high_quality') }}
-//   //   span.badge.badge-theme-tertiary(:class="[$style.labelQuality, $style.noSelect]" v-if="sourceTag") {{ item.source }}
 //   // div.list-item-cell(:style="{ width: rowWidth.r3 }" :aria-label="item.singer")
 //   //   span.select {{ item.singer }}
 //   // div.list-item-cell(:style="{ width: rowWidth.r4 }" :aria-label="item.albumName")

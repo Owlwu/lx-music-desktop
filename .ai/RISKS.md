@@ -17,14 +17,17 @@
 ## 精简后的残留数据（最容易被忽略）
 - **旧列表里的在线条目无法播放**：历史数据可能残留 `source != 'local'` 的歌曲。本地播放会抛
   「本地文件不存在」。若要彻底干净，需要一次性清洗（只保留 `source === 'local'` 的条目，先备份 DB）。
-- **历史表仍在**：`tables.ts` 仍创建 `music_url` / `music_other_source` / `download` 三张表，
-  但已无 DAO。**不要随手删表**：`verifyDB` 结构校验失败会让主进程备份并重建整库（用户数据清空）。
-  要删表必须同时改 `tables.ts` + `verifyDB.ts` + `migrate.ts`。
+- **历史表已在 DB v3 迁移中删除**：`music_url` / `music_info_other_source` / `download_list`
+  由 `migrateV2` 直接 `DROP TABLE IF EXISTS`。再改表结构时三处要一起改：
+  `tables.ts`（建表）+ `verifyDB.ts`（结构校验）+ `migrate.ts`（旧库迁移）；漏改会让 `verifyDB`
+  返回 `null`，主进程备份并重建整库（用户数据清空）。
+- **旧版遗留文件**：`<lxDataPath>/user_api.json` 会在启动时自动删除。
 - **已删除的设置键**：`common.apiSource`、`common.sourceNameType`、`common.tryAutoUpdate`、
   `common.showChangeLog`、`player.playQuality`、`download.*`、`search.*`、`openAPI.*`、`odc.*`
   已从 `defaultSetting`/`app_setting.d.ts` 移除。老配置文件里这些键会被忽略；**不要再读写它们**
   （读出来是 `undefined`，`formatMusicName(undefined, ...)` 之类会崩）。
-- **`LX.Download.ListItem` 类型仍保留**（历史下载记录），但没有任何下载实现。
+- `LX.Download` / `LX.Quality` / `LX.Music.MusicInfoOnline` 等类型已全部移除；
+  `LX.Music.MusicInfo` 就是本地歌曲，`source` 只能是 `'local'`。
 
 ## 本地歌曲的路径脆弱性
 - 本地歌曲的 `id` 与 `meta.filePath` **都是绝对路径**。文件移动/改名/换盘后：列表项还在，但播放失败。

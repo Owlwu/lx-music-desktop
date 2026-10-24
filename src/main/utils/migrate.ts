@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import { checkPath, joinPath } from '@common/utils/nodejs'
 import { log } from '@common/utils'
-import { filterMusicList, toNewMusicInfo } from '@common/utils/tools'
+import { convertLegacyMusicList } from '@common/utils/tools'
 import { APP_EVENT_NAMES } from '@common/constants'
 
 /**
@@ -23,7 +23,7 @@ export const parseDataFile = async<T>(name: string): Promise<T | null> => {
 interface OldUserListInfo {
   name: string
   id: string
-  source?: LX.OnlineSource
+  source?: string
   sourceListId?: string
   locationUpdateTime?: number
   list: any[]
@@ -43,15 +43,15 @@ export const migrateDBData = async() => {
   }
   let isRequiredSave = false
   if (playList) {
-    if (playList.defaultList) listDataAll.defaultList = filterMusicList(playList.defaultList.list.map(m => toNewMusicInfo(m)))
-    if (playList.loveList) listDataAll.loveList = filterMusicList(playList.loveList.list.map(m => toNewMusicInfo(m)))
-    if (playList.tempList) listDataAll.tempList = filterMusicList(playList.tempList.list.map(m => toNewMusicInfo(m)))
+    if (playList.defaultList) listDataAll.defaultList = convertLegacyMusicList(playList.defaultList.list)
+    if (playList.loveList) listDataAll.loveList = convertLegacyMusicList(playList.loveList.list)
+    if (playList.tempList) listDataAll.tempList = convertLegacyMusicList(playList.tempList.list)
     if (playList.userList) {
       listDataAll.userList = playList.userList.map(l => {
         return {
           ...l,
           locationUpdateTime: l.locationUpdateTime ?? null,
-          list: filterMusicList(l.list.map(m => toNewMusicInfo(m))),
+          list: convertLegacyMusicList(l.list),
         }
       })
     }
@@ -60,8 +60,8 @@ export const migrateDBData = async() => {
     const config = await parseDataFile<{ list?: { defaultList?: any[], loveList?: any[] } }>('config.json')
     if (config?.list) {
       const list = config.list
-      if (list.defaultList) listDataAll.defaultList = filterMusicList(list.defaultList.map(m => toNewMusicInfo(m)))
-      if (list.loveList) listDataAll.loveList = filterMusicList(list.loveList.map(m => toNewMusicInfo(m)))
+      if (list.defaultList) listDataAll.defaultList = convertLegacyMusicList(list.defaultList)
+      if (list.loveList) listDataAll.loveList = convertLegacyMusicList(list.loveList)
       isRequiredSave = true
     }
   }
@@ -90,7 +90,6 @@ export const migrateDataJson = async() => {
     playInfo?: any
     listPrevSelectId?: any
     listPosition?: any
-    listUpdateInfo?: any
   }>('data.json')
   if (!oldDataFile) return
   const newData: any = {}
@@ -98,7 +97,6 @@ export const migrateDataJson = async() => {
   if (oldDataFile.playInfo) newData.playInfo = oldDataFile.playInfo
   if (oldDataFile.listPrevSelectId) newData.listPrevSelectId = oldDataFile.listPrevSelectId
   if (oldDataFile.listPosition) newData.listScrollPosition = oldDataFile.listPosition
-  if (oldDataFile.listUpdateInfo) newData.listUpdateInfo = oldDataFile.listUpdateInfo
 
   await fs.promises.writeFile(path, JSON.stringify(newData)).catch(err => {
     log.error(err)

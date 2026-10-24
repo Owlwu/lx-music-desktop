@@ -50,7 +50,7 @@
 | --- | --- |
 | `ipcNames.ts` | 全部 IPC 事件名（`CMMON_EVENT_NAME`、`WIN_MAIN_RENDERER_EVENT_NAME`、`WIN_LYRIC_RENDERER_EVENT_NAME`、`HOTKEY_*` 等） |
 | `mainIpc.ts` / `rendererIpc.ts` | `ipcMain`/`ipcRenderer` 的类型化薄封装 |
-| `types/` | 全局 `LX.*` 命名空间：`app_setting`、`music`、`player`、`list`、`list_sync`、`dislike_list(_sync)`、`sync`、`music_file_sync`、`music_metadata`、`download_list`（历史类型）、`theme`、`sound_effect`、`desktop_lyric`、`config_files`、`ipc_*` |
+| `types/` | 全局 `LX.*` 命名空间：`app_setting`、`music`、`player`、`list`、`list_sync`、`dislike_list(_sync)`、`sync`、`music_file_sync`、`music_metadata`、`theme`、`sound_effect`、`desktop_lyric`、`config_files`、`ipc_*` |
 | `constants.ts` | `STORE_NAMES`、`APP_EVENT_NAMES`、`LIST_IDS`、`DATA_KEYS`、`DEFAULT_SETTING`、`TRAY_AUTO_ID` |
 | `defaultSetting.ts` / `defaultHotKey.ts` | 设置/快捷键默认值（已剔除音源、搜索、下载、OpenAPI、自动更新键） |
 | `config.ts` | 窗口尺寸档位、白名单等 |

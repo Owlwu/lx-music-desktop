@@ -4,7 +4,7 @@ declare namespace LX {
       id: string
       name: string
       // list: LX.Music.MusicInfo[]
-      source?: LX.OnlineSource
+      source?: string
       sourceListId?: string
       // position?: number
       locationUpdateTime: number | null
@@ -46,16 +46,6 @@ declare namespace LX {
 
     type SearchHistoryList = string[]
     type ListPositionInfo = Record<string, number>
-    type ListUpdateInfo = Record<string, {
-      updateTime: number
-      isAutoUpdate: boolean
-    }>
-
-    type ListSaveType = 'myList'
-    interface ListSaveInfo {
-      type: 'myList'
-      data: Partial<MyAllList>
-    }
 
 
     type ListActionDataOverwrite = MakeOptional<LX.List.ListDataFull, 'tempList'>

@@ -25,10 +25,7 @@ import { toRaw } from '@common/utils/vueTools'
 // import { base as eventBaseName } from '@renderer/event/names'
 // import { defaultList, loveList, userLists } from '@renderer/core/share/list'
 import {
-  toNewMusicInfo,
-  // toOldMusicInfo,
-  filterMusicList,
-  fixNewMusicInfoQuality,
+  convertLegacyMusicList,
 } from '@renderer/utils'
 import {
   showSelectDialog,
@@ -73,12 +70,12 @@ export default {
         try {
           const targetList = allLists.find(l => l.id == list.id)
           if (targetList) {
-            targetList.list = filterMusicList(list.list.map(m => toNewMusicInfo(m)))
+            targetList.list = convertLegacyMusicList(list.list)
           } else {
             allLists.push({
               name: list.name,
               id: list.id,
-              list: filterMusicList(list.list.map(m => toNewMusicInfo(m))),
+              list: convertLegacyMusicList(list.list),
               source: list.source,
               sourceListId: list.sourceListId,
               locationUpdateTime: list.locationUpdateTime ?? null,
@@ -98,12 +95,12 @@ export default {
         try {
           const targetList = allLists.find(l => l.id == list.id)
           if (targetList) {
-            targetList.list = filterMusicList(list.list).map(m => fixNewMusicInfoQuality(m))
+            targetList.list = convertLegacyMusicList(list.list)
           } else {
             allLists.push({
               name: list.name,
               id: list.id,
-              list: filterMusicList(list.list).map(m => fixNewMusicInfoQuality(m)),
+              list: convertLegacyMusicList(list.list),
               source: list.source,
               sourceListId: list.sourceListId,
               locationUpdateTime: list.locationUpdateTime ?? null,
@@ -140,7 +137,7 @@ export default {
       switch (allData.type) {
         case 'allData':
           // 兼容0.6.2及以前版本的列表数据
-          if (allData.defaultList) await overwriteListMusics({ listId: LIST_IDS.DEFAULT, musicInfos: filterMusicList(allData.defaultList.list.map(m => toNewMusicInfo(m))) })
+          if (allData.defaultList) await overwriteListMusics({ listId: LIST_IDS.DEFAULT, musicInfos: convertLegacyMusicList(allData.defaultList.list) })
           else await importOldListData(allData.playList)
           importOldSettingData(allData.setting)
           break
@@ -267,7 +264,7 @@ export default {
 
       switch (listData.type) {
         case 'defautlList': // 兼容0.6.2及以前版本的列表数据
-          await overwriteListMusics({ listId: LIST_IDS.DEFAULT, musicInfos: filterMusicList(listData.data.list.map(m => toNewMusicInfo(m))) })
+          await overwriteListMusics({ listId: LIST_IDS.DEFAULT, musicInfos: convertLegacyMusicList(listData.data.list) })
           break
         case 'playList':
           await importOldListData(listData.data)

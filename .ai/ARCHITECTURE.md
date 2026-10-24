@@ -91,8 +91,11 @@ global.staticPath   // dev: webpack 注入；prod: dist/static
   → 主进程备份旧库并重建，见 `src/main/app.ts`）。
 - 活跃 DAO 模块（`dbService/modules/`）：`list`（`my_list` + `my_list_music_info`）、`lyric`（raw + edited）、
   `dislike_list`。三者在 `dbService/index.ts` 合并成一个门面。
-- **表结构仍保留** `music_url` / `music_other_source` / `download` 三张历史表（`tables.ts` 未删），
-  但没有 DAO、没有写入；保留是为了不触发 `verifyDB` 重建（见 `RISKS.md`）。
+- 当前表结构（`DB_VERSION = '3'`）：`db_info`、`my_list`、`my_list_music_info`（+索引）、
+  `my_list_music_info_order`（+索引）、`lyric`、`dislike_list`。
+- 历史表 `music_url` / `music_info_other_source` / `download_list` 已在 v3 迁移（`migrate.ts`
+  `migrateV2`）中 `DROP TABLE IF EXISTS`；`verifyDB` 不再校验它们，旧库缺表也不会触发重建。
+- 启动时还会清理 `<lxDataPath>/user_api.json`（已删除功能的遗留配置）。
 
 ### JSON / 文件 —— `src/main/utils/store`
 - 设置：`config_v2`（`LX.AppSetting`）；`STORE_NAMES` 见 `src/common/constants.ts`。
@@ -110,8 +113,8 @@ global.staticPath   // dev: webpack 注入；prod: dist/static
 | `core/music/local.ts` | 本地文件路径（`file://`）、内嵌/同名封面、内嵌/同名 `.lrc`/`.krc`、已编辑歌词缓存 |
 | `core/music/utils.ts` | 仅歌词工具：`buildLyricInfo`、`getCachedLyricInfo`、`existTimeExp` |
 
-（原 `online.ts`（provider + DB 缓存 + 换源）与 `download.ts` 已删除；`LX.Download.ListItem` 类型仍保留，
-历史数据里可能还有此类记录，播放链路会把它当普通 `MusicInfo` 处理。）
+（`online.ts` / `download.ts` 及 `LX.Download` 类型均已删除；`LX.Music.MusicInfo` 即本地歌曲，
+`MusicInfoLocal` 仅作为等价别名保留。）
 
 ## 6. 窗口拓扑
 

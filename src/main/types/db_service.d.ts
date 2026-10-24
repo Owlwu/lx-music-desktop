@@ -35,7 +35,7 @@ declare namespace LX {
     interface UserListInfo {
       id: string
       name: string
-      source?: LX.OnlineSource
+      source?: string
       sourceListId?: string
       position: number
       locationUpdateTime: number | null

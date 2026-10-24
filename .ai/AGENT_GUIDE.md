@@ -70,7 +70,8 @@
 ### 改数据库
 - DAO 在 `src/main/worker/dbService/modules/`；表结构在 `tables.ts`，迁移在 `migrate.ts`。
 - **改表结构必须同时处理 `verifyDB` 与迁移**，否则 `init()` 返回 `null`，主进程备份旧库并重建（用户数据丢失）。
-- 已删功能的历史表（`music_url`/`music_other_source`/`download`）**保持原样**，只删 DAO 调用即可。
+- 历史表（`music_url`/`music_info_other_source`/`download_list`）已在 DB v3 迁移中删除；
+  新增表或改列时要同步 `tables.ts` + `verifyDB.ts` + `migrate.ts`（漏改会触发整库重建）。
 
 ### 改跨端同步
 - 协议与特性协商：`src/common/constants_sync.ts`、`src/main/modules/sync/`

@@ -1,12 +1,7 @@
-// import './app_setting'
-
 declare namespace LX {
-  interface CmdParams {
-    /**
-     * 搜索，启动软件时自动在搜索框搜索指定的内容，例如：-search="突然的自我 - 伍佰"
-     */
-    search?: string
+  type Source = 'local'
 
+  interface CmdParams {
     /**
      * 禁用硬件加速启动
      */
@@ -44,12 +39,6 @@ declare namespace LX {
 
     [key: string]: boolean | number | string
   }
-
-  type OnlineSource = 'kw' | 'kg' | 'tx' | 'wy' | 'mg'
-  type Source = OnlineSource | 'local'
-  type Quality = '128k' | '320k' | 'flac' | 'flac24bit' | '192k' | 'ape' | 'wav'
-
-  type QualityList = Partial<Record<LX.Source, LX.Quality[]>>
 
   interface EnvParams {
     cmdParams: CmdParams
@@ -104,11 +93,5 @@ declare namespace LX {
     play: boolean
     next: boolean
     prev: boolean
-  }
-
-  type UpdateStatus = 'downloaded' | 'downloading' | 'error' | 'checking' | 'idle'
-  interface VersionInfo {
-    version: string
-    desc: string
   }
 }
