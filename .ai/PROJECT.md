@@ -1,102 +1,107 @@
-# PROJECT.md — LX Music Desktop
+# PROJECT.md — LX Music Desktop（纯本地播放器分支）
 
-> Knowledge base entry. Purpose: give a coding agent the 30,000-foot view before it reads code.
-> All paths are relative to the repo root. See `AGENT_GUIDE.md` for task-by-task pointers.
+> 知识库入口。给 agent 的 30,000 英尺视角，读完再进代码。
+> 路径均相对仓库根目录。配套：`ARCHITECTURE.md`（进程/边界）、`MODULES.md`（文件在哪）、
+> `DATA_FLOW.md`（数据怎么走）、`API.md`（接口契约）、`RISKS.md`（坑）、`DEVELOPMENT.md`（怎么跑）。
 
-## What it is
+## 这是什么
 
-`lx-music-desktop` is **LX Music**, a free, cross-platform desktop music search & playback app
-(Apache-2.0, author `lyswhut`). It aggregates several Chinese music providers, resolves playable
-URLs / lyrics / cover art, and provides local library, playlists, download, offline cache, desktop
-lyric, cross-device sync, and a local OpenAPI. Version tracked in `package.json` (current `2.12.2`).
+`lx-music-desktop` 是本仓库的分支版本，已从上游「在线音乐聚合播放器」精简为 **纯本地音乐播放器**：
 
-## Tech stack (verified from `package.json`)
+- 播放本地音频文件（mp3 / flac / ogg / oga / wav / m4a），读取内嵌或同名 `.lrc` 歌词与内嵌/封面文件
+- 「我的列表」管理（试听列表、我的收藏、自定义列表、文件夹递归导入、导入导出 `.lxmc`）
+- 桌面歌词窗口、均衡器/卷积混响/变速变调、全局快捷键、系统托盘
+- 与 `lx-music-mobile` 的跨端同步：列表 / 不喜欢列表 / **本地音乐文件同步（musicFile）**
 
-| Concern | Tech | Notes |
+**已移除**（不要试图找回，相关文件已删除）：在线音源抓取（kw/kg/tx/wy/mg/xm/bd）、搜索、排行榜、
+在线歌单与歌单详情、评论、自定义音源（userApi）、本地 OpenAPI（HTTP+SSE）、内置下载器、自动更新、
+`lxmusic://` deeplink 协议、换源/音质切换逻辑与相关设置项。
+
+## 技术栈（据 `package.json`）
+
+| 关注点 | 技术 | 说明 |
 | --- | --- | --- |
-| Runtime | **Electron `40.9.2`** | Multi-window desktop app |
-| UI | **Vue `~3.3.13`** (Composition API) + **Vue Router `~4.5.1`** | Two Vue apps: main renderer + desktop-lyric renderer |
-| Language | **TypeScript `5.9.3`** (`allowJs: true`) + legacy JS (`musicSdk`, deeplink) | Extends `@tsconfig/recommended` |
-| DB | **`better-sqlite3` `^12.9.0`** | Runs in a Node worker thread, exposed via **`comlink`** |
-| HTTP | **`undici` `^7.25.0`** (main/worker) | Renderer talks to providers via IPC / user-API window |
-| Audio | HTMLAudioElement + Web Audio API (BiquadFilter EQ, analyser, pitch) | `src/renderer/plugins/player/` |
-| Build | **Webpack `^5`** | Separate bundles: main / renderer / renderer-lyric / renderer-scripts |
-| Packaging | **`electron-builder` `^26.9.0`** | Win (primary) / Linux / macOS |
-| State | Vue reactivity (`ref`/`reactive`/`computed`) — **no Pinia/Vuex** | `src/renderer/store/` |
-| i18n | Custom plugin | `src/renderer/plugins/i18n`, strings in `src/lang/` |
-| Node engine | **`node >= 22`**, `npm >= 8.5.2` | `postinstall` runs `electron-builder install-app-deps` |
+| 运行时 | Electron `40.9.2` | 多窗口桌面应用 |
+| UI | Vue `~3.3.13` + Vue Router `~4.5.1` | 两个 Vue 应用：主窗口 + 桌面歌词窗口 |
+| 语言 | TypeScript `5.9.3`（`allowJs: true`） | 无遗留 provider JS；少量 `.js` 工具/composable |
+| 数据库 | `better-sqlite3` `^13` | 跑在 Node worker 线程，经 Comlink 暴露 |
+| HTTP | `undici` `^7` | 主进程侧通用请求（代理/重试），当前仅同步与后续联网功能使用 |
+| 音频 | HTMLAudioElement + Web Audio API | EQ/卷积/analyser/变速变调 |
+| 构建 | Webpack `^5` | 三个 bundle：main / renderer / renderer-lyric |
+| 打包 | `electron-builder` `^26` | Windows 优先，Linux/macOS 次要 |
+| 状态 | Vue reactivity（无 Pinia/Vuex） | `src/renderer/store/` |
+| i18n | 自研插件 | `src/lang/{zh-cn,zh-tw,en-us,ko-kr}.json` |
+| Node | `>= 22`，npm `>= 8.5.2` | `postinstall` 重建原生依赖 |
 
-## Entry points
+依赖清单（`dependencies`）：`@simonwep/pickr`、`better-sqlite3`、`bufferutil`、`comlink`、
+`electron-log`、`font-list`、`iconv-lite`、`jschardet`、`message2call`、`music-metadata`、
+`undici`、`utf-8-validate`、`vue`、`vue-router`、`ws`。
 
-| Process | Entry | Role |
+## 入口
+
+| 进程 | 入口 | 作用 |
 | --- | --- | --- |
-| Main | `src/main/index.ts` | Boots Electron, registers modules, single-instance, deeplink, workers |
-| Main global init | `src/main/app.ts` | `global.lx` state, `global.envParams`, data paths, theme, proxy |
-| Renderer (main window) | `src/renderer/main.ts` | Vue app bootstrap, mount `App.vue` |
-| Renderer (desktop lyric) | `src/renderer-lyric/main.ts` | Small frameless lyric-window Vue app |
-| Worker (DB) | `src/main/worker/index.ts` | Creates the DB service worker (Comlink over `worker_threads`) |
-| Packaged main | `./dist/main.js` | `package.json` `main` field (webpack output) |
+| Main | `src/main/index.ts` | 启动 Electron、注册模块、单实例、DB worker |
+| Main 全局初始化 | `src/main/app.ts` | `global.lx`、数据目录、主题、代理、设置初始化 |
+| Renderer（主窗口） | `src/renderer/main.ts` | 挂载 `App.vue` |
+| Renderer（桌面歌词） | `src/renderer-lyric/main.ts` | 独立的歌词窗口 Vue 应用 |
+| Worker（DB） | `src/main/worker/index.ts` | `better-sqlite3` + Comlink |
+| 打包产物入口 | `dist/main.js` | `package.json` 的 `main` |
 
-## Top-level layout
+## 目录总览
 
 ```
-.
-├─ src/
-│  ├─ main/            # Electron main process (Node.js)
-│  │  ├─ index.ts app.ts
-│  │  ├─ modules/      # Feature modules (winMain, winLyric, userApi, sync, openApi, hotKey, tray, appMenu, commonRenderers)
-│  │  ├─ worker/       # DB worker (better-sqlite3 via Comlink)
-│  │  ├─ event/        # main-process event buses (app/list/dislike)
-│  │  ├─ types/ utils/
-│  ├─ renderer/        # Main-window Vue 3 app
-│  │  ├─ main.ts App.vue router.ts
-│  │  ├─ core/         # player, music, useApp (composables), apiSource, lyric
-│  │  ├─ store/        # reactive state (player, search, list, download, setting, …)
-│  │  ├─ views/        # routes: Search, List, songList, Leaderboard, Download, Setting
-│  │  ├─ components/ plugins/ event/ utils/
-│  │  ├─ utils/musicSdk/  # per-provider scrapers (kw, kg, tx, wy, mg, xm, bd)
-│  ├─ renderer-lyric/  # Desktop-lyric frameless window (own Vue app)
-│  ├─ common/          # Shared by main + renderer (types, ipcNames, config, utils, constants)
-│  ├─ lang/            # i18n resources
-│  └─ static/          # Static assets bundled next to the app
-├─ build-config/       # webpack configs + electron-builder pack scripts (Node)
-├─ dist/               # webpack output (packaged main entry is dist/main.js)
-├─ package.json tsconfig.json
+src/
+├─ main/                 # 主进程（Node）
+│  ├─ index.ts app.ts
+│  ├─ modules/           # winMain winLyric commonRenderers hotKey tray(appMenu) sync
+│  ├─ worker/            # DB worker（better-sqlite3 + Comlink）
+│  ├─ event/             # 主进程事件总线（app/list/dislike）
+│  ├─ types/ utils/
+├─ renderer/             # 主窗口（Vue 3）
+│  ├─ main.ts App.vue router.ts
+│  ├─ core/              # player / music / useApp / lyric / dislikeList / globalData
+│  ├─ store/             # player, list, dislikeList, setting, soundEffect, index
+│  ├─ views/             # List, Setting
+│  ├─ components/        # layout（Aside/Toolbar/PlayBar/PlayDetail）、base、common、material
+│  ├─ worker/            # 渲染进程 Web Worker（仅 main）
+├─ renderer-lyric/       # 桌面歌词窗口（独立 Vue 应用）
+├─ common/               # main 与 renderer 共享：ipcNames、types（LX.* 全局命名空间）、utils、theme
+├─ lang/                 # i18n 文案
+└─ static/               # 打包时复制到 dist 的静态资源
+build-config/            # webpack 配置 + electron-builder 打包脚本（无 renderer-scripts）
+doc/                     # 设计文档（含 music-file-sync 设计）
+tests/                   # 本地音乐文件同步的纯逻辑测试（node 直接跑）
 ```
 
-## Key features (feature → where)
+## 功能 → 位置
 
-- **Search / multi-source** — `src/renderer/views/Search/`, `src/renderer/core/music/`, `src/renderer/utils/musicSdk/`
-- **Playback** — `src/renderer/core/player/`, `src/renderer/plugins/player/`, `src/renderer/store/player/`
-- **Local library & playlists** — `src/renderer/views/List/`, `src/renderer/store/list`, DB `my_list` tables
-- **Download & offline cache** — `src/renderer/views/Download/`, `src/renderer/store/download`, DB `download`
-- **Music URL / lyric / cover resolution** — `src/renderer/core/music/{online,local,download}.ts`
-- **User-defined API plugins** — `src/main/modules/userApi/` (hidden `BrowserWindow` runs user JS)
-- **Desktop lyric window** — `src/main/modules/winLyric/` + `src/renderer-lyric/`
-- **Cross-device sync** — `src/main/modules/sync/` (server + client); `sync/musicFile/` syncs a chosen
-  subset of the local music library (audio + sibling `.lrc`) with the paired Android device
-- **Local OpenAPI (HTTP + SSE)** — `src/main/modules/openApi/`
-- **Themes** — `src/common/theme/`, `src/renderer/views/Setting/components/ThemeEditModal/`
-- **Hotkeys (local + global)** — `src/main/modules/hotKey/`, `src/common/hotKey`
-- **Auto-update** — `electron-updater` (`src/renderer/core/useApp/useUpdate.ts`)
+- **本地库与播放**：`src/renderer/views/List/`、`src/renderer/core/player/`、`src/renderer/plugins/player/`
+- **本地文件解析**（元数据/封面/歌词）：`src/renderer/worker/main/`（Web Worker）、`src/renderer/utils/music.ts`
+- **URL/封面/歌词分发**：`src/renderer/core/music/{index,local,utils}.ts`
+- **列表持久化**：`src/renderer/store/list/` + DB worker 的 `list` 模块（`my_list` / `my_list_music_info`）
+- **桌面歌词**：`src/main/modules/winLyric/` + `src/renderer-lyric/`
+- **设置**：`src/renderer/views/Setting/`（无音源/搜索/下载/OpenAPI/更新分区）
+- **跨端同步**：`src/main/modules/sync/` + `src/renderer/views/Setting/components/SettingSync/`
+- **主题**：`src/common/theme/`、`src/renderer/views/Setting/components/ThemeEditModal/`
+- **快捷键/托盘**：`src/main/modules/hotKey/`、`src/main/modules/tray.ts`
 
-## Platforms & packaging
+## 平台与打包
 
-- **Windows** is first-class (setup / portable / 7z "green", `win7` variants, arches `x64 x86 x86_64 arm64`).
-- **Linux**: `appImage deb rpm pacman`. **macOS**: `dmg` (`x64`, `arm64`).
-- Portable mode: on Windows, if a `portable` folder exists next to the exe, user data is stored inside it
-  (`setUserDataPath`, `src/main/app.ts:127`).
-- User data dir: `<userData>/LxDatas` (`global.lxDataPath`); SQLite file `lx.data.db` (WAL: `-wal`/`-shm`).
-- Deeplink scheme: `lxmusic://` (`URL_SCHEME_RXP`, `src/common/constants.ts:1`).
+- Windows 优先：setup / portable / 7z「绿色版」、`win7` legacy 变体，arch `x64/x86/x86_64/arm64`
+- Linux：`appImage deb rpm pacman`；macOS：`dmg`（x64 / arm64）
+- Portable：Windows 下若 exe 旁存在 `portable` 目录，用户数据写入该目录（`setUserDataPath`）
+- 用户数据目录：`<userData>/LxDatas`（`global.lxDataPath`），SQLite 文件 `lx.data.db`（WAL）
 
-## Related projects
+## 相关项目
 
-- Web version (shared provider scrapers' origin): `lyswhut/lx-music` (referenced by `musicSdk` naming `lwlm`/`lxm`).
-- Repo: `https://github.com/lyswhut/lx-music-desktop`
+- 移动端：`../lx-music-mobile`（同一 fork 思路的纯本地播放器，通过 musicFile 同步配对）
+- 上游：`https://github.com/lyswhut/lx-music-desktop`（作者 `lyswhut`，Apache-2.0）
 
-## Ground rules for agents
+## 给 agent 的硬规则
 
-- **Do not modify business code** when producing this knowledge base; only `.ai/*.md` is in scope.
-- Prefer small, verifiable changes. Run `npm run lint` (see `DEVELOPMENT.md`) after edits.
-- Mark anything not verified in source with `[待确认]` instead of guessing.
-- Never commit secrets; this app stores only user settings/DB — no embedded credentials are expected, but user-proxy and OpenAPI bind address are runtime values.
+- **不要重新引入在线音源/下载/用户脚本**：精简是刻意的目标；需要联网能力时，只做「歌词/封面匹配」
+  这类独立小模块，复用 `common/utils/request.ts` 与现有歌词存储。
+- 改动前先读 `RISKS.md`；DB 结构、同步协议、原生依赖是最容易出事的区域。
+- 交付前必须 `npm run lint` + `npm run build`（构建内置 ESLint，会失败即报错）。
+- 不在源码里猜测未验证的行为；不确定就标注 `[待确认]`，或去读实现再写。

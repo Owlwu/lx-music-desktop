@@ -1,148 +1,135 @@
-# ARCHITECTURE.md — Process & data architecture
+# ARCHITECTURE.md — 进程与数据架构
 
-> Companion to `PROJECT.md`. Focus: how the pieces fit together across Electron processes, how data
-> flows, and where the boundaries are. File paths relative to repo root.
+> 配套 `PROJECT.md`。重点：Electron 各进程如何协作、边界在哪、状态放哪。
+> 路径相对仓库根目录。
 
-## 1. Multi-process model
-
-LX Music runs **4 kinds of execution contexts** that must stay loosely coupled:
+## 1. 多进程模型
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│ MAIN PROCESS (Node.js)  —  src/main/index.ts                                 │
+│ 主进程 (Node) — src/main/index.ts                                             │
 │                                                                              │
-│  • Electron lifecycle, BrowserWindows, tray, menu, hotkeys, deeplink          │
-│  • Feature modules: winMain winLyric userApi sync openApi hotKey tray appMenu │
-│  • global.lx / global.envParams  (shared mutable main-process state)          │
-│  • HTTP via undici, FS, proxy                                                │
+│  • Electron 生命周期、BrowserWindow、托盘、菜单、快捷键、单实例               │
+│  • 功能模块：winMain winLyric commonRenderers hotKey tray appMenu sync        │
+│  • global.lx / global.envParams（主进程共享可变状态）                         │
+│  • HTTP（undici，用于同步/代理）、FS、主题、设置                              │
 │                                                                              │
-│  ┌─────────────────────────────┐   ┌────────────────────────────────────────┐ │
-│  │ DB WORKER (worker_threads)  │   │ USER-API hidden BrowserWindow           │ │
-│  │ src/main/worker/dbService   │   │ src/main/modules/userApi                │ │
-│  │ better-sqlite3 (WAL)        │   │ Runs user JS plugins in isolation       │ │
-│  │ exposed via comlink         │   │ (own renderer, no nodeIntegration)      │ │
-│  └─────────────────────────────┘   └────────────────────────────────────────┘ │
-└──────────────┬───────────────────────────────┬───────────────────────────────┘
-               │  ipcMain / ipcRenderer        │ MessagePort (contextBridge)
-               ▼                               ▼
+│  ┌────────────────────────────┐                                              │
+│  │ DB Worker (worker_threads) │  src/main/worker/dbService                   │
+│  │ better-sqlite3 (WAL)       │  经 Comlink 暴露给主进程                     │
+│  └────────────────────────────┘                                              │
+└──────────────┬───────────────────────────────────────────────────────────────┘
+               │ ipcMain / ipcRenderer
+               ▼
 ┌────────────────────────────────┐   ┌─────────────────────────────────────────┐
-│ MAIN-WINDOW RENDERER (Vue 3)   │   │ DESKTOP-LYRIC RENDERER (Vue 3)          │
+│ 主窗口渲染进程 (Vue 3)         │   │ 桌面歌词渲染进程 (Vue 3)                │
 │ src/renderer                   │   │ src/renderer-lyric                      │
-│ player, music, stores, views   │   │ frameless always-on-top lyric window    │
+│ 播放器、本地库、stores、views  │   │ 无边框、置顶、透明的歌词窗口            │
 └────────────────────────────────┘   └─────────────────────────────────────────┘
 ```
 
-### Boundaries
-- **Renderer ↔ Main**: only via IPC. Names live in `src/common/ipcNames.ts`; wrappers in
-  `src/common/mainIpc.ts` (main side: `mainOn`, `mainHandle`, `sendEvent`) and
-  `src/common/rendererIpc.ts` (renderer side: `rendererSend`, `rendererInvoke`, `rendererOn`, `rendererOff`).
-- **Main ↔ DB worker**: only via **Comlink** proxy (`global.lx.worker.dbService.*`). SQLite is never
-  touched directly outside the worker. See `src/main/worker/utils/worker.ts`.
-- **Main ↔ User-API window**: via a hidden `BrowserWindow`; scripts are loaded from user files and
-  invoked over IPC. The window is sandboxed (no node integration). See `src/main/modules/userApi/`.
-- **Main ↔ Desktop-lyric renderer**: two channels — (a) standard IPC, and (b) a **dedicated `MessagePort`**
-  created in main and handed to both windows for low-latency lyric/play status sync. Renderer side:
-  `src/renderer-lyric/core/mainWindowChannel.ts`.
+### 边界
+- **渲染进程 ↔ 主进程**：只能走 IPC。事件名集中在 `src/common/ipcNames.ts`；封装在
+  `src/common/mainIpc.ts`（主侧：`mainOn`/`mainHandle`/`sendEvent`）与
+  `src/common/rendererIpc.ts`（渲染侧：`rendererSend`/`rendererInvoke`/`rendererOn`/`rendererOff`）。
+- **主进程 ↔ DB worker**：只能走 Comlink 代理（`global.lx.worker.dbService.*`）。SQLite 只在 worker 内被触碰。
+- **主进程 ↔ 桌面歌词**：两条通道 —— 普通 IPC，以及主进程创建后分发给两个窗口的专用
+  `MessagePort`（低延迟歌词/播放状态同步）。渲染侧见 `src/renderer-lyric/core/mainWindowChannel.ts`。
+- **主进程 ↔ 渲染进程 Web Worker**：`new Worker(new URL('../main', import.meta.url))` + Comlink，
+  暴露为 `window.lx.worker.main`（本地文件解析等 CPU/IO 重活）。
 
-## 2. Shared state
+> 已不存在的边界（不要再找）：userApi 隐藏窗口、openApi HTTP/SSE 服务、deeplink 协议处理。
 
-### Main process — `global.lx` (built in `src/main/app.ts:16`, `initGlobalData`)
+## 2. 共享状态
+
+### 主进程 `global.lx`（`src/main/app.ts:initGlobalData`）
 ```
 global.lx = {
   inited, isSkipTrayQuit,
-  event_app,        // app event bus (createAppEvent, src/main/event)
-  event_list,       // list/library event bus
-  event_dislike,    // dislike-list event bus
-  appSetting,       // LX.AppSetting (from store/config_v2)
-  worker,           // { dbService } Comlink proxy
-  hotKey,           // { enable, config{local,global}, state }
-  theme,            // { shouldUseDarkColors, theme{ id,name,isDark,colors } }
-  player_status,    // LX.Player.Status snapshot (drives tray, OpenAPI, taskbar)
+  event_app, event_list, event_dislike,   // 主进程事件总线
+  appSetting,        // LX.AppSetting（来自 store/config_v2）
+  worker,            // { dbService } Comlink 代理
+  hotKey,            // { enable, config{local,global}, state }
+  theme,             // { shouldUseDarkColors, theme{ id,name,isDark,colors } }
+  player_status,     // LX.Player.Status 快照（驱动托盘、任务栏进度、桌面歌词）
 }
-global.envParams = { cmdParams, deeplink, workAreaSize? }   // CLI flags + lxmusic:// links
-global.lxDataPath  // <userData>/LxDatas  (DB + user files live here)
+global.envParams = { cmdParams, workAreaSize? }   // 仅 CLI 参数（deeplink 已移除）
+global.lxDataPath   // <userData>/LxDatas（DB 与用户文件）
 global.lxOldDataPath
-global.staticPath  // static assets (dev: webpack, prod: dist/static)
+global.staticPath   // dev: webpack 注入；prod: dist/static
 ```
-- `global.lx.player_status` is the **single source of truth for playback state** on the main side.
-  It is updated by renderer (`player_status` IPC) and consumed by `openApi`, tray, and the lyric channel.
+- `global.lx.player_status` 是**主进程侧播放状态的唯一来源**：渲染进程通过 `player_status` IPC 更新，
+  托盘与歌词通道消费。
 
-### Renderer — reactive stores (NOT Pinia)
-- `src/renderer/store/index.ts` — top-level reactive globals: `apiSource`, `proxy`, `sync`, `openAPI`,
-  `userApi`, `versionInfo`, `themeId`, `themeInfo`, `qualityList`, `windowSizeActive`, `sourceNames`.
-- Per-domain stores under `src/renderer/store/` (each is a module of `ref`/`reactive` + actions):
-  `player/` (`state.ts action.ts lyric.ts volume.ts playProgress.ts playbackRate.ts`), `search`, `list`,
-  `songList`, `download`, `dislikeList`, `hotSearch`, `leaderboard`, `setting`, `soundEffect`.
-- Convention: a store exports both the reactive state and small action functions; components read state
-  directly and call actions to mutate. There is no central `store.register`.
+### 渲染进程 —— 响应式 store（非 Pinia）
+- `src/renderer/store/index.ts` —— 顶层全局：`proxy`、`sync`、`windowSizeList`、`windowSizeActive`、
+  `isShowPact`、`isFullscreen`、`themeShouldUseDarkColors`、`themeId`、`themeInfo`。
+- 分域 store（每域 `state.ts` + `action.ts`，部分带 `hook.ts`）：
+  `player/`（`state action lyric volume playProgress playbackRate`）、`list/`（含 `listManage/`）、
+  `dislikeList/`，以及 `setting.ts`、`soundEffect.ts`、`utils.ts`（主题工具）。
+- 约定：store 既导出响应式状态也导出小函数；组件直接读状态、调用 action 改状态；没有集中注册表。
 
-## 3. Event buses (intra-process pub/sub)
+## 3. 事件总线（进程内 pub/sub）
 
-Two distinct mechanisms — do not confuse them:
+两种机制，别混：
 
-| Mechanism | Lives in | Used for |
+| 机制 | 位置 | 用途 |
 | --- | --- | --- |
-| **IPC** (`ipcNames.ts`) | cross-process | renderer ↔ main, renderer ↔ lyric window |
-| **Event bus** (`AppEvent`) | single process | decouple modules inside one process |
+| **IPC**（`ipcNames.ts`） | 跨进程 | 渲染 ↔ 主，渲染 ↔ 歌词窗口 |
+| **事件总线**（`Event`） | 单进程内 | 解耦同一进程里的模块 |
 
-- **Renderer bus**: `src/renderer/event/` — `Event.ts` (generic `on/off/emit/offAll`) + `appEvent.ts`
-  (`AppEvent` with typed helpers like `musicToggled()`, `playerError()`, `lyricUpdated()`). Created via
-  `createAppEventHub()`; consumers use `window.lx.appEvent` (see `src/renderer/main.ts`).
-- **Main bus**: `src/main/event/` — `createAppEvent()`, `createListEvent()`, `createDislikeEvent()`.
-  Subscribed by `app.ts` (`updated_config`, `player_status`, `app_inited`, …) and the feature modules.
-- **Lyric window bus**: `src/renderer-lyric/store/` + `core/mainWindowChannel.ts`.
+- 渲染进程总线：`src/renderer/event/`（`Event.ts` + `appEvent.ts`），实例是 `window.app_event`。
+- 主进程总线：`src/main/event/`（`createAppEvent`/`createListEvent`/`createDislikeEvent`），
+  被 `app.ts`、托盘、同步模块订阅。
+- 歌词窗口：`src/renderer-lyric/store/` + `core/mainWindowChannel.ts`。
 
-## 4. Data persistence
+## 4. 数据持久化
 
-### SQLite (primary) — `src/main/worker/dbService/`
-- Engine `better-sqlite3`, journal mode **WAL**. File `lx.data.db` in `global.lxDataPath`.
-- Init/verify: `dbService.init(dataPath)` returns `true` (existed), `false` (created), or `null`
-  (structure-verify failed → main backs up and re-inits; `src/main/app.ts:302`).
-- Modules under `dbService/modules/` (folders): `list` (covers both `my_list` and `my_list_music_info`),
-  `lyric`, `music_url`, `music_other_source`, `download`, `dislike_list`. Merged into one facade in
-  `dbService/index.ts`.
-- Cache tables (music_url, lyric raw/edited, other-source) can be cleared from UI; they are derived data.
+### SQLite —— `src/main/worker/dbService/`
+- `better-sqlite3`，WAL；文件 `<lxDataPath>/lx.data.db`。
+- 初始化/校验：`dbService.init(dataPath)` 返回 `true`（已存在）/`false`（新建）/`null`（结构校验失败
+  → 主进程备份旧库并重建，见 `src/main/app.ts`）。
+- 活跃 DAO 模块（`dbService/modules/`）：`list`（`my_list` + `my_list_music_info`）、`lyric`（raw + edited）、
+  `dislike_list`。三者在 `dbService/index.ts` 合并成一个门面。
+- **表结构仍保留** `music_url` / `music_other_source` / `download` 三张历史表（`tables.ts` 未删），
+  但没有 DAO、没有写入；保留是为了不触发 `verifyDB` 重建（见 `RISKS.md`）。
 
-### JSON / files (secondary) — `src/main/utils/`
-- Settings: `config_v2` (LX.AppSetting). Named keys in `STORE_NAMES` (`src/common/constants.ts:8`).
-- `DATA_KEYS` (constants) for small persisted blobs via `save_data`/`get_data` IPC:
-  `viewPrevState`, `playInfo`, `searchHistoryList`, `listScrollPosition`, `listPrevSelectId`,
-  `listUpdateInfo`, `ignoreVersion`, `leaderboardSetting`, `songListSetting`, `searchSetting`, `lastStartInfo`.
-- Themes, sound-effect presets (EQ/convolution), user-API files, hotkey config, sync state — each in
-  its own file under `global.lxDataPath`.
+### JSON / 文件 —— `src/main/utils/store`
+- 设置：`config_v2`（`LX.AppSetting`）；`STORE_NAMES` 见 `src/common/constants.ts`。
+- `DATA_KEYS`（经 `save_data`/`get_data` IPC 存取的小 blob）：`viewPrevState`、`playInfo`、
+  `searchHistoryList`、`listScrollPosition`、`listPrevSelectId`、`lastStartInfo`。
+- 主题、音效预设（EQ/卷积）、快捷键配置、同步状态各自单独文件。
 
-## 5. Music-source resolution architecture
+## 5. 播放资源解析架构（已收敛为本地）
 
-The heart of the app. Two layers:
+`src/renderer/core/music/index.ts` 现在是薄封装，只保留一条路径：
 
-1. **Built-in provider scrapers** — `src/renderer/utils/musicSdk/`. One module per provider
-   (`kw` 酷我, `kg` 酷狗, `tx` QQ音乐, `wy` 网易云, `mg` 咪咕, `xm` 虾米, `bd` 百度[disabled]).
-   Aggregated in `musicSdk/index.js` (`sources.sources` = the *enabled* list; `bd` present but commented out).
-   Each provider exposes a uniform shape: `musicSearch`, `musicInfo`, `lyric`, `pic`, `songList`,
-   `leaderboard`, `hotSearch`, `comment`, `album`, `singer`, `tipSearch` (see `API.md`).
-   Some providers need crypto/sign helpers (`tx/utils/crypto.js`, `kg/vendors/infSign.min.js`, `wy/utils/crypto.js`).
+| 文件 | 职责 |
+| --- | --- |
+| `core/music/index.ts` | 对外的 `getMusicUrl / getPicPath / getLyricInfo`，转调 `local.ts` |
+| `core/music/local.ts` | 本地文件路径（`file://`）、内嵌/同名封面、内嵌/同名 `.lrc`/`.krc`、已编辑歌词缓存 |
+| `core/music/utils.ts` | 仅歌词工具：`buildLyricInfo`、`getCachedLyricInfo`、`existTimeExp` |
 
-2. **User API plugins** — user-supplied JS (in-app or imported file) that implements the same
-   provider interface. Loaded/executed in the hidden user-API window (`src/main/modules/userApi/`).
-   `src/renderer/core/apiSource.ts` switches between "built-in" and "user" at runtime
-   (`store.apiSource`); `musicSdk/api-source.js` (`getApi`) routes each call to the active implementation.
+（原 `online.ts`（provider + DB 缓存 + 换源）与 `download.ts` 已删除；`LX.Download.ListItem` 类型仍保留，
+历史数据里可能还有此类记录，播放链路会把它当普通 `MusicInfo` 处理。）
 
-`src/renderer/core/music/index.ts` decides **where** a URL/lyric/pic comes from for a track:
-`online.ts` (provider + cache in DB), `local.ts` (imported files), `download.ts` (offline copies).
+## 6. 窗口拓扑
 
-## 6. Window topology
-
-| Window | Creator | Notes |
+| 窗口 | 创建者 | 说明 |
 | --- | --- | --- |
-| Main window | `src/main/modules/winMain/main.ts` | Frameless, resizable, `windowSizeList` presets (`src/common/config.ts`) |
-| Desktop lyric | `src/main/modules/winLyric/` | Frameless, always-on-top, transparent, draggable; separate Vue app |
-| User API | `src/main/modules/userApi/` | Hidden (`show: false`), isolated JS runtime for plugins |
-| Modals | renderer-side | Theme, settings, dialogs are in-window Vue overlays, not separate windows |
+| 主窗口 | `src/main/modules/winMain/main.ts` | 无边框可缩放，尺寸档位见 `src/common/config.ts` |
+| 桌面歌词 | `src/main/modules/winLyric/` | 无边框、置顶、透明、可拖拽；独立 Vue 应用 |
+| 弹窗 | 渲染进程内 | 主题、设置、对话框都是窗口内 Vue 覆盖层，不是独立窗口 |
 
-## 7. Security posture (Electron)
+## 7. 安全姿态
 
-- Renderer windows run **without node integration**; they reach Node only through typed IPC.
-- `listenerAppEvent` (`src/main/app.ts:169`) locks down navigation / `window.open` / `<webview>`:
-  external http(s) links go to `shell.openExternal`; `will-attach-webview` strips preloads and disables
-  nodeIntegration. (See `RISKS.md`.)
-- User API scripts run in a sandboxed hidden window precisely to contain untrusted user code.
+- 主窗口 `webPreferences`：`contextIsolation: false`、`nodeIntegration: true`、`nodeIntegrationInWorker: true`
+  （渲染进程需要 Node 能力做本地文件解析与 Worker）。
+- `listenerAppEvent`（`src/main/app.ts`）在启动后锁定导航：外部 http(s) 链接走 `shell.openExternal`，
+  `will-attach-webview` 剥离 preload 并禁用 nodeIntegration。
+- 已移除 userApi 沙箱窗口与 OpenAPI 服务 —— 当前没有运行用户脚本或监听端口的模块。
+
+## 8. 与上游的关系
+
+本仓库已 fork 出独立分支（`master`），`master_up` 仅作历史/对照保留；**不再定期 merge 上游**。
+新增代码不要为了「与上游一致」而保留无用分支逻辑。

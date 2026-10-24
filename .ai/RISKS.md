@@ -1,99 +1,78 @@
-# RISKS.md — Things that can bite an agent (and the user)
+# RISKS.md — 会咬人的地方
 
-> Practical warnings about fragile areas, external dependencies, and verification gaps. Not a bug list —
-> a "what to watch for" list.
+> 脆弱点、外部依赖、验证缺口的实用提醒。不是 bug 列表，是「注意什么」。
 
-## Native / build-time dependencies
-- **`better-sqlite3`, `bufferutil`, `utf-8-validate`, and the custom `qrc_decode.node`** are native modules.
-  They must be compiled for the installed Electron ABI. `postinstall` runs `electron-builder
-  install-app-deps` to do this; a missing C++ toolchain / prebuilt cache, or an Electron/Node version
-  mismatch, breaks `npm install` and `npm run dev`.
-- `qrc_decode.node` is loaded from `build/Release/` (dev) or a relative path (prod) — see
-  `build-config/main/webpack.config.base.js` externals. If it's absent, related decode features fail.
-- **Node `>= 22`** is a hard requirement (also required by `undici ^7`). On an older Node the install or
-  dev server may misbehave.
+## 原生 / 构建期依赖
+- `better-sqlite3`、`bufferutil`、`utf-8-validate` 是原生模块，必须按当前 Electron ABI 编译。
+  `postinstall` 跑 `electron-builder install-app-deps`；缺少工具链/预编译缓存或 Electron/Node 版本
+  不匹配会直接让 `npm install` / `npm run dev` 失败。
+- **Node `>= 22` 是硬要求**（`undici ^7` 亦要求）。
+- **`ELECTRON_RUN_AS_NODE` 环境变量**：某些编辑器终端/CI/沙箱会注入 `=1`，导致 Electron 以纯 Node
+  运行并抛 `Not running in an Electron environment!`。`runner-dev.js` 已处理；其它启动脚本需自行清理。
 
-## Forked GitHub dependencies (pinned to specific commits)
-These come straight from GitHub, not npm, and are pinned to commit hashes in `package.json`:
-`needle`, `electron-devtools-installer`, `eslint-formatter-friendly`, `spinnies`, `webpack-hot-middleware`.
-- They require **network access to GitHub** at install time and can silently change behavior if the commit
-  is updated/replaced. Pin-aware updates are needed for `npm i` to succeed.
-- `electron-updater` is pinned to an exact version (`6.8.4`); keep it that way.
+## Fork 依赖（按 commit 锁定）
+`eslint-formatter-friendly`、`spinnies`、`webpack-hot-middleware` 等来自 GitHub，安装需网络访问；
+上游 commit 被替换会导致行为变化。升级要连同锁定 commit 一起改。
 
-## External music-provider fragility (the #1 runtime risk)
-- The built-in providers in `src/renderer/utils/musicSdk/` **scrape third-party web services**
-  (Kuwu/Kugou/Tencent/Wangyiyun/Migu/Xiami, etc.). Endpoints, cookies/tokens, and response shapes change
-  **without notice** upstream. A provider can stop resolving URLs or lyrics with no error in this repo.
-- There is no automated contract test for these; failures surface as "no playable audio" / lyric-load
-  errors at runtime. When touching a provider, expect its upstream to have drifted.
-- `bd` is present but **disabled** in `musicSdk/index.js`; `xm` is excluded from cross-source search. Don't
-  assume every folder under `musicSdk/` is live.
-- The `api-source.js` `allApi`/`api-source-info.ts` tables are effectively **empty/legacy** — built-in
-  providers are called directly via `musicSdk[source]`. `[待确认]` whether these are dead code.
+## 精简后的残留数据（最容易被忽略）
+- **旧列表里的在线条目无法播放**：历史数据可能残留 `source != 'local'` 的歌曲。本地播放会抛
+  「本地文件不存在」。若要彻底干净，需要一次性清洗（只保留 `source === 'local'` 的条目，先备份 DB）。
+- **历史表仍在**：`tables.ts` 仍创建 `music_url` / `music_other_source` / `download` 三张表，
+  但已无 DAO。**不要随手删表**：`verifyDB` 结构校验失败会让主进程备份并重建整库（用户数据清空）。
+  要删表必须同时改 `tables.ts` + `verifyDB.ts` + `migrate.ts`。
+- **已删除的设置键**：`common.apiSource`、`common.sourceNameType`、`common.tryAutoUpdate`、
+  `common.showChangeLog`、`player.playQuality`、`download.*`、`search.*`、`openAPI.*`、`odc.*`
+  已从 `defaultSetting`/`app_setting.d.ts` 移除。老配置文件里这些键会被忽略；**不要再读写它们**
+  （读出来是 `undefined`，`formatMusicName(undefined, ...)` 之类会崩）。
+- **`LX.Download.ListItem` 类型仍保留**（历史下载记录），但没有任何下载实现。
 
-## Verification gaps
-- **No test runner and no test suite.** There is no `npm test`, and no `typecheck` script. The only
-  automated gates are ESLint (runs in-build) and the webpack build itself.
-- Therefore: verify changes by `npm run build` (must pass lint + bundle) and, for behavior, by
-  `npm run dev` and exercising the feature manually. Expect to be the de-facto test harness.
-- **Except** local music file sync: the desktop repo's `tests/music-file-sync.test.ts` and
-  `tests/music-file-fs.test.ts` run under plain node (see `DEVELOPMENT.md`).
+## 本地歌曲的路径脆弱性
+- 本地歌曲的 `id` 与 `meta.filePath` **都是绝对路径**。文件移动/改名/换盘后：列表项还在，但播放失败。
+- 目前没有「库扫描/路径修复」实现；如需实现，复用 `main/modules/sync/musicFile/localFs.ts`
+  的 `scanEntries`/`scanIndex/scanFolderTree` 与 `diff.ts` 的纯逻辑（或内容签名）来重定位。
+- 同一首歌重复导入会产生重复项（列表提供查重/去重工具，但不会自动合并）。
 
-## Local music file sync — known tradeoffs
-- Content equality between the two devices is decided by **size + a content signature** (mtimes always
-  differ across copies, so they are never compared). The signature is `fnv1a32 + djb2_32` over
-  `"mf1:<size>:" + first 4096 bytes + last 4096 bytes`, computed while scanning (see `diff.ts`:
-  `buildSignature` / `getSignatureRanges`). It exists because a **byte-size-preserving** content change
-  (e.g. decrypting an obfuscated audio file in place) is invisible to a size-only rule: both sides keep
-  saying "already synced" and the peer never receives the good file.
-- Tradeoffs of the signature: only the first/last 4 KB are sampled (a difference confined to the middle
-  can still be missed); it is a 64-bit non-cryptographic hash; and if **either** side omits `sig`
-  (older build, or sampling failed) that file falls back to the size-only rule — so both ends must be
-  updated together to get the new behaviour.
-- A sibling `.lrc` is not an independent sync item: it is carried along with its audio file, so adding or
-  removing only the `.lrc` is not detected as a change (and `.lrc` content is not part of the signature).
-- Conflicts default to direction `pull` (use the peer's copy), which is the wrong default when the local
-  copy is the good one; both UIs therefore expose "全部用本地覆盖 / 全部用对端覆盖" bulk buttons for the
-  conflict group.
-- No resume support: cancelling mid-file leaves a partial file, which shows up as a conflict next time.
-- The baseline (`<lxDataPath>/sync/musicFile/baseline.json`) lives only on the device that *started* the
-  sync, so each side keeps its own baseline.
-- When this device runs as **server** with several clients connected, the driver picks the first ready
-  client that supports the feature (no per-device picker yet).
-- `diff.ts` is duplicated verbatim in `lx-music-mobile`; a change on one side must be mirrored (the
-  repo-root test enforces identity).
+## 跨端同步 — 已知取舍
+- 内容一致性用 **size + 内容签名**（首/尾各 4 KiB 的 `fnv1a32 + djb2_32`），因为跨设备 mtime 必然不同；
+  签名只覆盖首尾，中间差异可能漏判；任一端缺 `sig` 会退回「仅比大小」。
+- 同名 `.lrc` 不作为独立同步项，随音频文件一起搬运；只改 `.lrc` 内容不会被识别为变更。
+- 冲突默认方向为 `pull`（用对端覆盖），UI 提供「全部用本地/对端覆盖」批量按钮。
+- 无断点续传：中途取消会留下半截文件，下次同步表现为冲突。
+- baseline 存在**发起同步的那一侧**（`<lxDataPath>/sync/musicFile/baseline.json`）。
+- 本机作为 **server** 且多客户端连接时，驱动只选第一个就绪且支持该特性的客户端。
+- `diff.ts` 与 `lx-music-mobile` 逐字节镜像，`tests/music-file-fs.test.ts` 会断言一致性。
 
-## IDE vs build mismatch
-- The `tsconfig.json` `paths` (aliases) are **commented out**; the **webpack aliases are authoritative**.
-  IDE type navigation for `@main/@renderer/@common/...` may show errors that the build does not. Trust the
-  build, not the IDE squiggles, for alias resolution.
+## 验证缺口
+- **没有测试框架、没有 `npm test`、没有 typecheck 脚本**。门禁只有 ESLint（构建内）与 webpack 构建。
+- 行为验证靠 `npm run dev` 手动走查。你是事实上的测试者。
+- 例外：`tests/music-file-*.test.ts`（纯逻辑，node 直接跑）。
 
-## Architecture coupling / gotchas
-- **Two separate "worker" systems** that look alike: main's `global.lx.worker.dbService` (SQLite,
-  `worker_threads`) vs renderer's `window.lx.worker.{main,download}` (Web Workers). Editing one does not
-  affect the other; the renderer reaches the DB only via IPC → main → `dbService`.
-- **Two separate event buses** (`window.app_event` renderer vs `global.lx.event_app` main). Crossing the
-  process boundary always means IPC, never a shared bus.
-- **No state library** — shared renderer state is loose `ref`/`reactive` objects; there's no central store
-  to consult for "source of truth". Follow the existing `store/<domain>` pattern rather than inventing a new
-  global.
-- Renderer code has partial Node access; `window.lx` / `window.lxData` expose app data. Don't assume a
-  fully sandboxed renderer.
+## IDE 与构建不一致
+- `tsconfig.json` 的 `paths` 被注释，**webpack 别名才是权威**。IDE 里 `@main/@renderer/...` 可能报红，
+  构建却正常——以构建为准。
 
-## Security posture
-- The **user-API plugin system runs arbitrary user-provided JS** in a hidden `BrowserWindow`
-  (`src/main/modules/userApi/`). Untrusted scripts can make network calls; treat that window as a
-  sandbox boundary and avoid widening its privileges.
-- The main process applies a security lockdown in `listenerAppEvent()` (`src/main/app.ts`) after init.
-  Be careful adding `nodeIntegration`/relaxed CSP or new external-content windows.
-- The OpenAPI server binds to `127.0.0.1` by default; it can be switched to LAN (`0.0.0.0`). Any new
-  endpoint must not leak paths/secret data, since LAN mode exposes it on the network.
+## 架构耦合 / 易混淆点
+- **两套 worker**：主进程 `global.lx.worker.dbService`（SQLite / `worker_threads`）与渲染进程
+  `window.lx.worker.main`（Web Worker，本地文件解析）。改一个不影响另一个；渲染进程只能经 IPC 触达 DB。
+- **两套事件总线**：`window.app_event`（渲染）与 `global.lx.event_app`（主）。跨进程只能 IPC。
+- **没有状态库**：状态是散落的 `ref/reactive`，没有统一「真相源」；跟随既有 `store/<domain>` 模式。
+- 渲染进程有 Node 能力（`nodeIntegration: true`、`nodeIntegrationInWorker: true`），但业务职责仍应放主进程。
 
-## Platform priorities
-- **Windows is the primary target** (most pack/publish scripts, setup/portable/7z, win7 legacy builds).
-  macOS and Linux are supported but secondary. Prefer Windows-first behavior; use platform guards
-  (`process.platform`) for OS-specific code.
+## 安全姿态
+- 主进程在 `listenerAppEvent()` 中锁定外链与 `<webview>`（剥离 preload、禁用 nodeIntegration）。
+  新增窗口/放宽 `nodeIntegration`/CSP 要非常谨慎。
+- userApi 沙箱窗口与 OpenAPI 服务已移除，目前没有运行用户脚本或监听端口的模块。
+- 若后续加「在线匹配歌词/封面」：只允许固定目标域名的 GET、限制响应大小、校验内容后再入库；
+  不要引入「任意 URL 下载 + 执行」的路径。
 
-## i18n / copy
-- Three locales (`zh-cn`, `en-us`, `zh-tw`) are kept in sync manually; adding a key to only one file leaves
-  the others falling back to `zh-cn`. Missing/typo'd keys render the **key string itself** to the user.
+## 平台优先级
+- **Windows 是主目标**（打包脚本、setup/portable/7z、win7 兼容变体最全）。macOS/Linux 次要。
+  OS 相关代码用 `process.platform` 守卫。
+
+## i18n / 文案
+- `zh-cn` / `en-us` / `zh-tw`（另有 `ko-kr`）人工同步；只加一个语言会回退到 `zh-cn`。
+- 缺失 key 会把 key 本身显示给用户。
+
+## 与上游的关系
+- 本仓库已 fork 并精简，`master_up` 仅作对照；**不要按上游行为假设本仓库仍有在线能力**。
+- 上游修复不会自动进来；同步/DB/播放相关 bug 需自行判断是否要手工移植（多数上游改动与在线功能相关，可直接跳过）。

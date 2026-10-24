@@ -1,201 +1,123 @@
-# API.md — Interfaces to call (and their contracts)
+# API.md — 可以调用的接口与契约
 
-> The app has several distinct "APIs": IPC, the provider (musicSdk) surface, user-API plugins, the DB
-> worker service, the local OpenAPI (HTTP/SSE), and the in-process event bus. This file documents the
-> shape of each so an agent can call the right thing. Signatures below are from source; full types are
-> in `src/common/types/*.d.ts` under the global `LX` namespace.
+> 本应用有几类「API」：IPC、DB worker 服务、渲染进程 Web Worker、进程内事件总线、同步对端 RPC。
+> 本文件给出各自的形状，签名以源码为准；完整类型在 `src/common/types/*.d.ts` 的全局 `LX` 命名空间。
 
-## 1. IPC (renderer ⇄ main)
+## 1. IPC（渲染 ⇄ 主）
 
-### Wrappers
-Main side (`src/common/mainIpc.ts`):
-- `mainOn<T>(name, handler)` — receive a one-way message; `handler({ params: T })`.
-- `mainHandle<T, R>(name, handler)` — receive and **return** a value; `handler({ params: T }): Promise<R>`.
-- `sendEvent(name, params?)` — push from main to renderer.
+### 封装
+主侧 `src/common/mainIpc.ts`：
+- `mainOn<T>(name, handler)` — 单向接收，`handler({ params: T })`
+- `mainHandle<T, R>(name, handler)` — 接收并返回值，`handler({ params: T }): Promise<R>`
+- `sendEvent(name, params?)` — 主 → 渲染推送
 
-Renderer side (`src/common/rendererIpc.ts`):
-- `rendererInvoke<T, R>(name, params?)` — call and await main's return value.
-- `rendererSend<T>(name, params?)` — one-way to main.
-- `rendererOn(name, listener)` / `rendererOff(name, listener)` — subscribe to main pushes.
+渲染侧 `src/common/rendererIpc.ts`：
+- `rendererInvoke<T, R>(name, params?)` / `rendererSend<T>(name, params?)`
+- `rendererOn(name, listener)` / `rendererOff(name, listener)`
 
-Event names are grouped in `src/common/ipcNames.ts`: `CMMON_EVENT_NAME`, `WIN_MAIN_RENDERER_EVENT_NAME`,
-`WIN_LYRIC_RENDERER_EVENT_NAME`, `USER_API_*`, `HOTKEY_RENDERER_EVENT_NAME`, etc. **Never hard-code a
-string** — import the constant.
+事件名按组定义在 `src/common/ipcNames.ts`：
+`CMMON_EVENT_NAME`(common)、`PLAYER_EVENT_NAME`(player)、`DISLIKE_EVENT_NAME`(dislike)、
+`WIN_MAIN_RENDERER_EVENT_NAME`(winMain)、`WIN_LYRIC_RENDERER_EVENT_NAME`(winLyric)、
+`HOTKEY_RENDERER_EVENT_NAME`(hotKey)。**不要硬编码字符串**，import 常量。
 
-### Canonical renderer-side calls — `src/renderer/utils/ipc.ts`
-Sync / local music file sync: see §1.1.
-Settings: `getSetting()`, `updateSetting(partial)`, `onSettingChanged(fn)`.
-Data blobs: `saveData`/`getData` via `WIN_MAIN_RENDERER_EVENT_NAME.save_data/get_data` + `DATA_KEYS`
-(e.g. `savePlayInfo`, `getSearchHistoryList`, `saveListPositionInfo`, `getLeaderboardSetting`).
-Music cache: `getMusicUrl(musicInfo, type)`, `saveMusicUrl(...)`, `clearMusicUrl()`, `getMusicUrlCount()`.
-Lyric: `getPlayerLyric`, `getLyricRaw`, `saveLyric`, `saveLyricEdited`, `removeLyricEdited`, `clearLyric*`.
-Other source: `getOtherSource`, `saveOtherSource`, `clearOtherSource`.
-Download: `downloadTasksGet/Create/Update/Remove`, `downloadListClear`.
-User API: `importUserApi`, `setUserApi`, `removeUserApi`, `getUserApiList`, `sendUserApiRequest`,
-`userApiRequestCancel`, `onUserApiStatus`.
-Sync: `sendSyncAction`, `onSyncAction`, `getSyncServerDevices`, `removeSyncServerDevice`.
-Local music file sync (same `sync_action` channel): `musicFileGetConfig`, `musicFileGetFolders`,
-`musicFileCompare`, `musicFileApply`, `musicFileCancel`; progress is pushed as the
-`musicFile_progress` variant of `SyncMainWindowActions`.
-OpenAPI: `sendOpenAPIAction(action)`.
-Window: `minWindow/maxWindow/minMaxWindowToggle/showHideWindowToggle/focusWindow/setFullScreen/quitApp/closeWindow`.
-Hotkeys: `hotKeySetEnable/Config/GetStatus`, `onKeyDown`, `onUpdateHotkey`.
-Themes: `getThemes/saveTheme/removeTheme`.
-Audio presets: `getUserSoundEffectEQPresetList/save...`, convolution variants.
-Player status (to main): `sendPlayerStatus(partial)`, `onPlayerAction(fn)`.
-Update: `checkUpdate/downloadUpdate/quitUpdate`, `onUpdateAvailable/Error/Progress/Downloaded/NotAvailable`.
+### 渲染侧调用清单（`src/renderer/utils/ipc.ts`）
+- 设置：`getSetting`、`updateSetting`、`onSettingChanged`
+- 启动/环境：`sendInited`、`getEnvParams`
+- 播放状态：`sendPlayerStatus`、`onPlayerAction`、`setPlayerAction`
+- 数据 blob（`DATA_KEYS`）：`saveLastStartInfo`/`getLastStartInfo`、`savePlayInfo`/`getPlayInfo`、
+  `saveSearchHistoryList`/`getSearchHistoryList`、`saveListPositionInfo`/`getListPositionInfo`、
+  `saveListPrevSelectId`/`getListPrevSelectId`、`saveViewPrevState`/`getViewPrevState`
+- 歌词：`getPlayerLyric`、`getLyricRaw`、`clearLyricRaw`、`getLyricRawCount`、`getLyricEdited`、
+  `saveLyric`、`saveLyricEdited`、`removeLyricEdited`、`clearLyric`、`clearLyricEdited`、`getLyricEditedCount`
+- 主题：`getThemes`、`saveTheme`、`removeTheme`、`onThemeChange`
+- 音效预设：`getUserSoundEffectEQPresetList`/`save...`、`getUserSoundEffectConvolutionPresetList`/`save...`
+- 快捷键：`getHotKeyConfig`、`hotKeySetEnable`、`hotKeySetConfig`、`hotKeyGetStatus`、`onKeyDown`、`onUpdateHotkey`、`allHotKeys`
+- 窗口：`minWindow`、`maxWindow`、`minMaxWindowToggle`、`showHideWindowToggle`、`focusWindow`、
+  `closeWindow`、`quitApp`、`setFullScreen`、`setWindowSize`、`setIgnoreMouseEvents`、`setPowerSaveBlocker`、`onFocus`
+- 文件/系统：`showSelectDialog`、`openSaveDir`、`openDirInExplorer`、`getSystemFonts`、`getCacheSize`、`clearCache`
+- 歌词窗口：`onNewDesktopLyricProcess`
+- 同步：`sendSyncAction`、`onSyncAction`、`getSyncServerDevices`、`removeSyncServerDevice`
+- 本地音乐文件同步（同 `sync_action` 通道）：`musicFileGetConfig`、`musicFileGetFolders`、
+  `musicFileCompare`、`musicFileApply`、`musicFileCancel`；进度以 `SyncMainWindowActions` 的
+  `musicFile_progress` 变体推送
 
-### 1.1 Sync features (`list` + `dislike` + `musicFile`)
-Settings keys: `sync.mode` (`server`/`client`), `sync.enable`, `sync.server.port`, `sync.client.host`,
-plus the local-music-file-sync keys `sync.musicFile.root` (absolute music folder on this device) and
-`sync.musicFile.scope` (`string[]` of relative subfolders; empty = whole root).
+> 已移除：`getMusicUrl/saveMusicUrl/clearMusicUrl`、`getOtherSource/*`、`downloadTasks*`、
+> `importUserApi/setUserApi/removeUserApi/*`、`sendOpenAPIAction`、`checkUpdate/downloadUpdate/*`、
+> `onDeeplink/clearEnvParamsDeeplink`。
 
-### `musicFile` feature RPC (encrypted WebSocket + `message2call`)
-Both roles expose the same methods to the peer; the handshake only negotiates the feature
-(`featureVersion.musicFile = 1`), transfers are started manually by the user on either side.
+## 2. 同步特性（`list` + `dislike` + `musicFile`）
 
-| Method | Args | Returns |
+设置项：`sync.mode`(`server`/`client`)、`sync.enable`、`sync.server.port`、`sync.client.host`、
+`sync.musicFile.root`（本机音乐根目录绝对路径）、`sync.musicFile.scope`（相对子目录数组，空=整根）。
+
+### `musicFile` 对端 RPC（加密 WebSocket + `message2call`）
+两端互相暴露同一组方法；握手只协商能力（`featureVersion.musicFile = 1`），传输由用户手动触发。
+
+| 方法 | 参数 | 返回 |
 | --- | --- | --- |
-| `musicFile_get_root` | – | `string` (peer's music folder) |
+| `musicFile_get_root` | – | `string`（对端音乐目录） |
 | `musicFile_get_index` | `scope: string[]` | `LX.Sync.MusicFile.FileIndex` |
 | `musicFile_read_file` | `path, offset, size` | `{ data: base64, eof }` |
 | `musicFile_write_file` | `path, offset, data, isLast` | `void` |
 | `musicFile_delete_file` | `path, withLyric` | `void` |
-| `musicFile_sync_finished` | – | `void` (client-side handshake) |
+| `musicFile_sync_finished` | – | `void`（客户端握手） |
 
-All paths are **relative to each device's `sync.musicFile.root`**, `/`-separated, and validated by
-`assertSafeRelPath` on both ends. Chunk size is `MUSIC_FILE_CHUNK_SIZE` (192 KiB). The diff/plan rules
-and the on-disk protocol contract are documented in `doc/music-file-sync/本地音乐文件同步-设计.md`.
+跨端路径一律相对各自 `sync.musicFile.root`、以 `/` 分隔，两端都过 `assertSafeRelPath`；
+分块大小 `MUSIC_FILE_CHUNK_SIZE`（192 KiB）。diff/plan 规则见 `doc/music-file-sync/本地音乐文件同步-设计.md`。
 
-## 2. Provider (musicSdk) surface
+## 3. Workers（两个系统，别混）
 
-Aggregated in `src/renderer/utils/musicSdk/index.js` (`default export`, also `musicSdk`). Providers are
-keyed by source id: `kw kg tx wy mg xm bd`. **Enabled** list is `musicSdk.sources.sources` (`bd` is
-present but commented out; `xm` excluded from cross-source search).
+### 3a. 主进程 DB worker — `global.lx.worker.dbService`
+`worker_threads.Worker`（`src/main/worker/`）+ `better-sqlite3`，经 `Comlink.expose` 暴露给主进程；
+**SQLite 只在这里被访问**。调用方式像本地异步对象：
+- `init(dataPath)` → `true`（已存在）/`false`（新建）/`null`（结构校验失败）
+- 合并门面：`list`（`my_list` + `my_list_music_info`）、`lyric`（raw + edited）、`dislike_list`
+- 表结构仍包含历史表 `music_url` / `music_other_source` / `download`（无 DAO 使用，保留以免 `verifyDB` 重建）
+- 桥：`src/main/worker/utils/worker.ts`（`Comlink.expose`/`wrap`）
+- **渲染进程从不直接调用 `dbService`**，一律 IPC → 主进程 → `dbService`
 
-### Top-level methods
-- `musicSdk.init()` — `Promise.all` of each provider's `init()` (token warm-up).
-- `musicSdk.searchMusic({ name, singer, source, limit })` — query the other enabled sources in parallel.
-- `musicSdk.findMusic({ name, singer, albumName, interval, source })` — cross-source match + scoring
-  (returns ordered `LX.Music.MusicInfoOnline[]`); powers "toggle source".
-- `musicSdk.supportQuality[source]` — qualities a source supports.
+### 3b. 渲染进程 Web Worker — `window.lx.worker.main`
+`src/renderer/worker/main/`，Comlink 包装（`src/renderer/worker/utils/index.ts`）：
+- `createLocalMusicInfos(filePaths)` — 批量解析本地文件元数据（`utils/music.ts`）
+- `getMusicFilePic(filePath)` — 内嵌/同名封面
+- `getMusicFileLyric(filePath)` — 内嵌/同名 `.lrc`/`.krc` 歌词
+- 列表工具：排序、过滤、查重、导入导出、列表内搜索等（`worker/main/list.ts`）
+- `proxyCallback(fn)`（`Comlink.proxy`）把回调传回渲染进程
 
-### Per-provider object (e.g. `src/renderer/utils/musicSdk/kw/index.js`)
-Each provider exposes (methods may be omitted if unsupported):
-- `getMusicUrl(songInfo, quality) → { promise }` — resolve a playable audio URL.
-- `getPic(songInfo) → { promise }` — cover URL.
-- `getLyric(songInfo, isGetLyricx?) → { promise }` — `LX.Music.LyricInfo`.
-- `musicSearch.search(keyword, page, limit)` — search results.
-- `songList.*`, `leaderboard.*`, `hotSearch.*`, `comment.*`, `album.*`, `singer.*`, `tipSearch.*`.
-- `handleMusicInfo(songInfo)` — enrich (name/singer/img/album).
-- `getMusicInfo(songInfo)`, `getMusicDetailPageUrl(songInfo)`.
-- `init()` — optional warm-up (e.g. tokens).
+> 原 `window.lx.worker.download` 已删除。
 
-Callers go through `core/music/utils.ts` (`handleGetOnlineMusicUrl/PicUrl/LyricInfo`) which call
-`musicSdk[source].getMusicUrl(toOldMusicInfo(musicInfo), quality).promise`, etc. The `toOldMusicInfo` /
-`toNewMusicInfo` helpers convert between the legacy flat object (what scrapers expect) and the typed
-`LX.Music.MusicInfoOnline`.
+## 4. 进程内事件总线
 
-### Source dispatch / user-API switching — `api-source.js`
-- `apis(source)` returns the **active** implementation for a source: if the runtime `apiSource` (store)
-  begins with `user_api`, it returns `userApi.apis[source]`; otherwise the built-in (via `allApi`/`getAPI`).
-- `supportQuality` is keyed per `apiSourceInfo` entry (`api-source-info.ts`). Note: the built-in `allApi`
-  table is currently empty — built-in providers are called directly via `musicSdk[source]` (see above);
-  `apis()`/`allApi` is the extension hook for pluggable named API sets. `[待确认]` the exact intended
-  role of the empty `allApi`/`api-source-info` tables (appears to be a legacy/unused extension point).
+渲染进程 `window.app_event`（`src/renderer/event/appEvent.ts`，`createAppEventHub()`）：
+- 播放：`play pause stop error`
+- 底层播放器：`playerPlaying playerPause playerStop playerEnded playerError playerLoadeddata
+  playerLoadstart playerCanplay playerEmptied playerWaiting playerDeviceChanged`
+- 传输状态：`musicToggled setProgress setVolume setPlaybackRate setVolumeIsMute
+  activePlayProgressTransition`
+- 媒体：`picUpdated lyricUpdated lyricOffsetUpdate lyricLinePlay`
+- 列表：`myListUpdate(ids)`
+- 杂项：`focus setting dragStart dragEnd keyDown`
 
-### Request helper (renderer)
-Providers use `httpFetch` from `src/renderer/utils/request.ts`, returning `{ promise, cancelHttp() }`
-(an `AbortController`-based fetch wrapper). Cancellation is used to supersede stale fetches.
+主进程 `global.lx.event_app`（`src/main/event/`）是**另一套**：`updated_config`、`player_status`、
+`app_inited`、`main_window_close`、`system_theme_change` 等。不要混用。
 
-## 3. User-API plugin contract
+## 5. 播放器 store / 引擎（渲染进程）
 
-A user plugin is a JS file (`LX.UserApi.UserApiInfoFull`, `src/common/types/user_api.d.ts`) with:
-- `id, name, description, script, allowShowUpdateAlert, author?, homepage?, version?`
-- `sources?: Record<LX.Source, UserApiSourceInfo>` where `UserApiSourceInfo = { name, type: 'music',
-  actions: ('musicUrl'|'lyric'|'pic')[], qualitys: LX.Quality[] }`.
+`src/renderer/store/player/`：
+- `state.ts` — `isPlay`、`playMusicInfo`、`musicInfo`、`playedList`、`tempPlayList`、`playInfo`，以及音量/进度/倍速子 store
+- `action.ts` — `setPlayMusicInfo`、`setMusicInfo`、`setAllStatus`、`getList`、`addPlayedList`、
+  `clearPlayedList`、`clearTempPlayeList`、`removePlayedList`、`setPlayListId`
 
-The `script` defines functions the app invokes through `sendUserApiRequest({ requestKey, data })`
-(IPC `request_user_api`) → executed in the hidden user-API window → returns a result. The returned
-implementation is stored in `store.userApi.apis` and consumed via `apis(source)`. Manage via
-`importUserApi(fileText)` / `setUserApi(source)` / `removeUserApi(ids)`; status via `onUserApiStatus`.
-UI: `views/Setting/components/UserApiModal.vue`, `UserApiOnlineImportModal.vue`. Runtime switch:
-`src/renderer/core/apiSource.ts` + `store.apiSource`.
+播放动作：`src/renderer/core/player/action.ts`（`playList/playListById/play/playNext/playPrev/
+togglePlay/pause/stop/collectMusic/uncollectMusic/dislikeMusic/setMusicUrl`）。
+音频引擎：`src/renderer/plugins/player/`（`setPlay/setPause/setStop/setResource/isEmpty` + Web Audio 图）。
 
-## 4. Workers (there are TWO — do not confuse them)
+## 6. 后续联网功能的预留接口（尚未实现）
 
-### 4a. Main DB worker — `global.lx.worker.dbService`
-Runs in a `worker_threads.Worker` (`src/main/worker/`), wraps `better-sqlite3`, and is exposed to **main**
-process code as `global.lx.worker.dbService` (via `Comlink.expose`). This is the **only** place SQLite is
-touched. Call like a local object (all methods `async`):
-- `dbService.init(dataPath)` → `true` (existed) | `false` (created) | `null` (structure verify failed).
-- Module objects are merged onto one facade (`dbService/index.ts`): `list` (covers `my_list` +
-  `my_list_music_info`), `lyric` (raw + edited), `music_url`, `music_other_source`, `download`,
-  `dislike_list` (see `dbService/modules/`).
-- Tables (SQLite, WAL, file `lx.data.db` in `global.lxDataPath`): `my_list`, `my_list_music_info`,
-  `lyric`, `music_url`, `music_other_source`, `download`, `dislike_list`.
-- Bridge: `src/main/worker/utils/worker.ts` (`Comlink.expose` / `comlink.wrap` over a Node `Worker`).
-- **The renderer never calls `dbService` directly** — it goes through IPC (`utils/ipc.ts` → main handlers
-  in `modules/*/rendererEvent.ts` → `global.lx.worker.dbService`).
-- Migration/repair: `src/main/worker/dbService/migrate.ts` + `src/main/utils/migrate.ts` + backup logic
-  in `app.ts:302`.
+规划中的「在线匹配歌词 / 封面」应作为独立小模块实现，复用：
+- `common/utils/request.ts`（undici + 重试 + 代理；主进程侧 `main/utils/request.ts` 封装 `httpFetch`）
+- 歌词写回：IPC `save_lyric_raw` / `save_lyric_edited`（已有）
+- 封面写回：`musicInfo.meta.picUrl` + `store/list/action.updateListMusics`（已有）
+- 代理配置：`network.proxy.*` + `views/Setting/components/SettingNetwork.vue`
 
-### 4b. Renderer Web Workers — `window.lx.worker.{main, download}`
-Separate Comlink-wrapped **Web Workers** created in `src/renderer/worker/utils/index.ts` and exposed on
-`window.lx.worker` (declared in `src/renderer/types/app.d.ts`). Used to keep heavy work off the UI thread:
-- `window.lx.worker.main` (`WorkerMainTypes`, `src/renderer/worker/main/`) — CPU/IO helpers:
-  `createLocalMusicInfos`, `sortListMusicInfo`, `filterMusicList`, `filterDuplicateMusic`,
-  `getMusicFilePic`, `getMusicFileLyric`, `langS2t`, `readLxConfigFile`, `saveLxConfigFile`,
-  `exportPlayListToText`, `exportPlayListToCSV`, `searchListMusic`, `createSortedList`.
-- `window.lx.worker.download` (`WorkerDownloadTypes`, `src/renderer/worker/download/`) — performs the
-  actual file downloads in a Web Worker: `createDownloadTasks`, `startTask`, `pauseTask`, `removeTask`,
-  `updateUrl`, `writeMeta`, `saveLrc`. (Task metadata is persisted separately via the main DB worker.)
-- `proxyCallback(fn)` (`Comlink.proxy`) is used to pass event callbacks back into the renderer from a worker.
-
-## 5. Local OpenAPI (HTTP + SSE) — `src/main/modules/openApi/index.ts`
-
-Bound to `127.0.0.1` (or `0.0.0.0` when LAN is enabled). `Access-Control-Allow-Origin: *`.
-
-| Endpoint | Method | Effect |
-| --- | --- | --- |
-| `/status?filter=k1,k2` | GET | JSON snapshot of `global.lx.player_status` (default keys: status,name,singer,albumName,lyricLineText,duration,progress,playbackRate) |
-| `/lyric` | GET | current `lyric` text |
-| `/lyric-all` | GET | `{ lyric, tlyric, rlyric, lxlyric }` |
-| `/subscribe-player-status?filter=` | GET | **SSE stream** of `player_status` changes (`event: <key>\ndata: <json>`) |
-| `/play` `/pause` | GET | transport control |
-| `/skip-next` `/skip-prev` | GET | next/prev |
-| `/seek?offset=<s>` | GET | seek (400 if out of range) |
-| `/collect` `/uncollect` | GET | love/unlove |
-| `/volume?volume=0..100` | GET | set volume |
-| `/mute?mute=true|false` | GET | mute toggle |
-
-Controls call `sendTaskbarButtonClick(action, data)` → renderer `player_action_on_button_click`.
-Lifecycle: `startServer(port, bindLan)` / `stopServer()` / `getStatus()`; toggled from
-`views/Setting/components/SettingOpenAPI.vue` via `sendOpenAPIAction`.
-
-## 6. In-process event bus (renderer `AppEvent`)
-
-Created by `createAppEventHub()` (`src/renderer/event/appEvent.ts`), consumed as `window.app_event`.
-Typed helpers (each is an `emit` wrapper; subscribe with `.on('<name>', fn)` / `.off`):
-- Playback: `play pause stop error(code)`.
-- Raw player: `playerPlaying playerPause playerStop playerEnded playerError playerLoadeddata
-  playerLoadstart playerCanplay playerEmptied playerWaiting playerDeviceChanged`.
-- Transport state: `musicToggled setProgress(progress,maxPlayTime?) setVolume setPlaybackRate
-  setVolumeIsMute activePlayProgressTransition`.
-- Media: `picUpdated lyricUpdated lyricOffsetUpdate lyricLinePlay(text,line)`.
-- Library: `myListUpdate(ids) downloadListUpdate()`.
-- Misc: `configUpdate setting focus dragStart dragEnd keyDown(event)`.
-
-The **main-process** bus (`src/main/event/`) is a separate `createAppEvent()` (events: `updated_config`,
-`player_status`, `app_inited`, `main_window_close`, `deeplink`, `system_theme_change`, …) — do not mix the two.
-
-## 7. Player store (renderer)
-
-`src/renderer/store/player/`:
-- `state.ts` — `isPlay`, `playMusicInfo`, `musicInfo` (current track meta), `playedList`, `tempPlayList`,
-  `playInfo`, plus volume/playProgress/playbackRate sub-stores.
-- `action.ts` — `setPlayMusicInfo`, `setMusicInfo`, `setAllStatus`, `getList`, `addPlayedList`,
-  `clearPlayedList`, `clearTempPlayeList`, `removePlayedList`, `setPlayListId`, `addDislikeInfo` (via core).
-- Actions used by the player: `src/renderer/core/player/action.ts` (`playList/playListById/play/playNext/
-  playPrev/togglePlay/pause/stop/collectMusic/uncollectMusic/dislikeMusic/setMusicUrl`).
-- Audio engine: `src/renderer/plugins/player/` (`setPlay/setPause/setStop/setResource/isEmpty` + Web Audio graph).
+不要复活 `core/music/online.ts` 那套「抓音源 + 换源」结构。

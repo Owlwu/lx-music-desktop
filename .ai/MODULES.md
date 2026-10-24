@@ -1,134 +1,134 @@
-# MODULES.md — Where everything lives
+# MODULES.md — 文件都在哪
 
-> Directory / module map with responsibilities and key files. Use with `ARCHITECTURE.md` (how it
-> connects) and `DATA_FLOW.md` (how it moves). Paths relative to repo root.
+> 目录/模块地图，含职责与关键文件。配合 `ARCHITECTURE.md`（怎么连起来）与 `DATA_FLOW.md`（怎么流动）。
 
-## 1. Main-process modules — `src/main/modules/`
+## 1. 主进程模块 — `src/main/modules/`
 
-Registration order is fixed in `src/main/modules/index.ts` (guarded by `isRegistered`):
-`userApi → commonRenderers → winMain → hotKey → tray → appMenu → winLyric`. Each default export is a
-`register*()` function that wires IPC handlers and Electron lifecycle.
+注册顺序固定于 `src/main/modules/index.ts`（`isRegistered` 守卫）：
+`commonRenderers → winMain → hotKey → tray → appMenu → winLyric`。
+每个模块默认导出 `registerX()`，内部完成 IPC 与 Electron 生命周期接线。
+（`sync` 不在这个注册表里：它的启停通过 `winMain` 的 `sync_action` IPC 调用；模块自身的默认导出目前未被调用，属上游遗留。）
 
-| Module | Path | Responsibility |
+| 模块 | 路径 | 职责 |
 | --- | --- | --- |
-| **winMain** | `winMain/` | The main `BrowserWindow` lifecycle + **all** primary business IPC. |
-| **winLyric** | `winLyric/` | Desktop lyric window (frameless, always-on-top) + its IPC (`rendererEvent.ts`). |
-| **userApi** | `userApi/` | Hidden `BrowserWindow` that loads & runs user-defined JS API plugins. |
-| **commonRenderers** | `commonRenderers/` | Cross-renderer concerns: settings get/set, env params, theme, system fonts. |
-| **hotKey** | `hotKey/` | Local + global (system-wide) hotkeys → forward as app events. |
-| **tray** | `tray.ts` | System tray icon + menu (playback controls, show/quit). |
-| **appMenu** | `appMenu.ts` | Application menu bar. |
-| **sync** | `sync/` | Cross-device sync: `server/` (host) + `client/` (connect), list/dislike events, `musicFile/` (local music **file** sync), migrate. |
-| **openApi** | `openApi/index.ts` | Local HTTP + SSE server exposing playback status & controls. |
+| **winMain** | `winMain/` | 主窗口生命周期 + 绝大多数业务 IPC |
+| **winLyric** | `winLyric/` | 桌面歌词窗口（无边框置顶）及其 IPC |
+| **commonRenderers** | `commonRenderers/` | 跨渲染进程公共能力：设置读写、env、主题、系统字体 |
+| **hotKey** | `hotKey/` | 本地 + 全局快捷键，转发为 app 事件 |
+| **tray** | `tray.ts` | 托盘图标/菜单（播放控制、显示、退出） |
+| **appMenu** | `appMenu.ts` | 应用菜单栏 |
+| **sync** | `sync/` | 跨端同步：`server/`（主机）+ `client/`（连接）+ `musicFile/`（本地音乐文件同步） |
 
-### winMain internals (the biggest module)
-- `main.ts` — create/show/destroy the main window, resize, bounds, fullscreen, transparency, cache.
-- `autoUpdate.ts` — `electron-updater` wiring (check/download/progress events).
-- `utils.ts` — helpers.
-- `rendererEvent/index.ts` — **registers every `WIN_MAIN_RENDERER_EVENT_NAME` handler**. Splits into:
-  - `app.ts` — window controls, dialogs, theme, player-status reporting, dev tools.
-  - `music.ts` — music URL / lyric get-save / other-source cache.
-  - `data.ts` — generic `save_data`/`get_data` (DATA_KEYS).
-  - `download.ts` — download task list CRUD (backed by DB `download`).
-  - `hotKey.ts` — hotkey config/status.
-  - `soundEffect.ts` — EQ / convolution preset persistence.
-  - `sync.ts`, `openAPI.ts`, `userApi.ts`, `process.ts` — module bridges.
-  - `kw_decodeLyric.ts`, `tx_decodeLyric.ts` — provider-specific lyric decoding (encrypted LRC).
+### winMain 内部
+- `main.ts` — 创建/显示/销毁主窗口、尺寸、全屏、透明、缓存
+- `utils.ts` — 辅助函数
+- `rendererEvent/index.ts` — 注册所有 `WIN_MAIN_RENDERER_EVENT_NAME` 处理器，拆分到：
+  - `app.ts` — 窗口控制、对话框、主题、播放状态上报、devtools
+  - `music.ts` — 歌词 raw/edited 的读写与查询（`get_palyer_lyric`、`get_lyric_raw` …）
+  - `data.ts` — 通用 `save_data`/`get_data`（`DATA_KEYS`）
+  - `hotKey.ts` — 快捷键配置/状态
+  - `soundEffect.ts` — EQ/卷积预设持久化
+  - `sync.ts` — 同步模块桥接
+  - `process.ts` — 进程信息等杂项
 
-## 2. Main-process support — `src/main/`
+## 2. 主进程支撑 — `src/main/`
 
-| Path | Role |
+| 路径 | 作用 |
 | --- | --- |
-| `index.ts` | Process entry: `initGlobalData` → env params → single-instance → modules → `app.whenReady`. |
-| `app.ts` | `initGlobalData`, `initAppSetting` (DB init + migrate), `registerDeeplink`, `listenerAppEvent`, `setUserDataPath`, `quitApp`. |
-| `worker/` | DB worker: `index.ts` (createWorkers), `dbService/` (see §5), `utils/worker.ts` (Comlink + `worker_threads`). |
-| `event/` | Main event buses: `createAppEvent`, `createListEvent`, `createDislikeEvent`. |
-| `utils/` | `request.ts` (undici wrapper + proxy), `setting.ts`, `theme.ts`, `hotKey.ts`, `migrate.ts`, `nodejs.ts`, etc. |
-| `types/` | Main-side TS declarations. |
+| `index.ts` | 进程入口：`initGlobalData` → env → 单实例 → 注册模块 → `app.whenReady` |
+| `app.ts` | `initGlobalData`、`initAppSetting`（DB 初始化 + 迁移）、`listenerAppEvent`、`setUserDataPath`、`quitApp` |
+| `worker/` | DB worker：`index.ts`（createWorkers）、`dbService/`、`utils/worker.ts`（Comlink + worker_threads） |
+| `event/` | 主进程事件总线：`createAppEvent`、`createListEvent`、`createDislikeEvent` |
+| `utils/` | `request.ts`（undici 包装 + 代理）、`setting.ts`、`theme.ts`、`hotKey.ts`、`migrate.ts`、`nodejs.ts` |
+| `types/` | 主进程侧类型声明 |
 
-## 3. Shared — `src/common/`
+## 3. 共享层 — `src/common/`
 
-Imported by both main and renderer. This is the contract layer.
+被 main 与 renderer 同时引入，是契约层。
 
-| Path | Role |
+| 路径 | 作用 |
 | --- | --- |
-| `ipcNames.ts` | **All IPC event names** grouped: `CMMON_EVENT_NAME`, `WIN_MAIN_RENDERER_EVENT_NAME`, `WIN_LYRIC_RENDERER_EVENT_NAME`, `USER_API_*`, `HOTKEY_*`, etc. |
-| `mainIpc.ts` / `rendererIpc.ts` | Thin typed wrappers over `ipcMain` / `ipcRenderer` (`mainOn`, `mainHandle`, `sendEvent` / `rendererSend`, `rendererInvoke`, `rendererOn`, `rendererOff`). |
-| `types/` | **The `LX.*` global namespace** as `.d.ts`: `app_setting`, `music`, `player`, `list`, `download_list`, `dislike_list`, `sync`, `user_api`, `open_api`, `theme`, `sound_effect`, `desktop_lyric`, `music_metadata`, `ipc_main`, `ipc_renderer`, `utils`, … |
-| `constants.ts` | `STORE_NAMES`, `DATA_KEYS`, `LIST_IDS`, `APP_EVENT_NAMES`, `QUALITYS`, `DOWNLOAD_STATUS`, `URL_SCHEME_RXP`, `DEFAULT_SETTING`. |
-| `config.ts` | `windowSizeList`, `navigationUrlWhiteList`. |
-| `defaultSetting/` | Default `LX.AppSetting` (deep-merged with stored values). |
-| `hotKey/` | Hotkey name/action constants (`HOTKEY_PLAYER`, `HOTKEY_COMMON`, `HOTKEY_DESKTOP_LYRIC`). |
-| `theme/` | Theme definitions + `createThemes.js` (build script). |
-| `error/` | Shared error definitions/codes. |
-| `utils/` | `request.ts` (undici), `common.ts`, `vueTools.ts` (re-exports Vue APIs), `electron.ts`, `nodejs.ts`. |
+| `ipcNames.ts` | 全部 IPC 事件名（`CMMON_EVENT_NAME`、`WIN_MAIN_RENDERER_EVENT_NAME`、`WIN_LYRIC_RENDERER_EVENT_NAME`、`HOTKEY_*` 等） |
+| `mainIpc.ts` / `rendererIpc.ts` | `ipcMain`/`ipcRenderer` 的类型化薄封装 |
+| `types/` | 全局 `LX.*` 命名空间：`app_setting`、`music`、`player`、`list`、`list_sync`、`dislike_list(_sync)`、`sync`、`music_file_sync`、`music_metadata`、`download_list`（历史类型）、`theme`、`sound_effect`、`desktop_lyric`、`config_files`、`ipc_*` |
+| `constants.ts` | `STORE_NAMES`、`APP_EVENT_NAMES`、`LIST_IDS`、`DATA_KEYS`、`DEFAULT_SETTING`、`TRAY_AUTO_ID` |
+| `defaultSetting.ts` / `defaultHotKey.ts` | 设置/快捷键默认值（已剔除音源、搜索、下载、OpenAPI、自动更新键） |
+| `config.ts` | 窗口尺寸档位、白名单等 |
+| `constants_sync.ts` | 同步协议常量与 `FeaturesList`（`list` / `dislike` / `musicFile`） |
+| `utils/` | `common`、`nodejs`、`request`(undici)、`tools`、`electron`、`lyricUtils`、`lyric-font-player`、`pinyin`、`migrateSetting` |
 
-## 4. Renderer (main window) — `src/renderer/`
+## 4. 主窗口渲染进程 — `src/renderer/`
 
-| Path | Role |
+### core
+| 路径 | 作用 |
 | --- | --- |
-| `main.ts` | Vue bootstrap: i18n, plugins, router, global props, mount. |
-| `App.vue` | Root layout: sidebar, toolbar, routed view, play-bar, modals. |
-| `router.ts` | Routes: `/search`, `/songList/list`, `/songList/detail`, `/leaderboard`, `/list`, `/download`, `/setting`. |
-| `core/player/` | `action.ts` (play/next/prev/seek/toggle), `index.ts`, `timeoutStop.ts`, `utils.ts`. |
-| `core/music/` | `index.ts` (dispatcher), `online.ts` (provider + DB cache), `local.ts`, `download.ts`, `utils.ts`. |
-| `core/lyric.ts` | LRC parse/format/offset for the main window. |
-| `core/apiSource.ts` | Switch built-in vs user API source. |
-| `core/globalData.ts` / `dislikeList.ts` | Cross-cutting renderer state. |
-| `core/useApp/` | **Composables** (`use*`): `usePlayer/*` (play events, status, progress, lyric, volume, sound effect, media session/device, preload next), `useSync`, `useOpenAPI`, `useUpdate`, `useInitUserApi`, `useDeeplink/*`, `useEventListener`, `useDataInit`, `listAutoUpdate`, … |
-| `store/` | Reactive stores (see `ARCHITECTURE.md` §2). |
-| `views/` | Route components: `Search`, `List` (MyList/MusicList), `songList` (List/Detail), `Leaderboard`, `Download`, `Setting` (many `Setting*` components + modals). |
-| `components/` | Reusable UI (lists, modals, player bar, lyric view, etc.). |
-| `plugins/player/` | Audio engine: `HTMLAudioElement` + Web Audio graph (analyser, BiquadFilter EQ chain, convolution, pitch-shifter). |
-| `event/` | Renderer event bus (`Event.ts`, `appEvent.ts`, `keyEvent.ts`). |
-| `utils/` | `ipc.ts` (renderer-side IPC facade — **the canonical list of IPC calls**), `musicSdk/` (provider scrapers), theme, download, etc. |
+| `core/player/` | 播放控制：`action.ts`（playList/playNext/playPrev/setMusicUrl…）、`utils.ts`、`timeoutStop.ts` |
+| `core/music/` | 资源分发：`index.ts`（对外）、`local.ts`（本地文件/封面/歌词）、`utils.ts`（歌词工具） |
+| `core/useApp/` | 启动编排：`index.ts`（总入口）、`useDataInit`、`useEventListener`、`useHandleEnvParams`、`useSettingSync`、`useStatusbarLyric`、`useSync`、`usePlayer/` |
+| `core/lyric.ts` | 歌词行解析/偏移 |
+| `core/dislikeList.ts` | 不喜欢规则匹配（同步特性保留，UI 已隐藏） |
+| `core/globalData.ts` | 构建 `window.lx`（worker、状态默认值） |
 
-### `utils/musicSdk/` (provider scrapers)
-- `index.js` — `sources.sources` (enabled list), `init()`, `searchMusic()`, `findMusic()` (cross-source
-  matching/scoring), `supportQuality`.
-- `api-source.js` — `getApi(...)` resolves the active implementation (built-in or user) per method;
-  `api-source-info.ts` — source metadata.
-- Per provider dirs: `kw/` (most complete: musicSearch, musicInfo, lyric, pic, songList, leaderboard,
-  hotSearch, comment, album, tipSearch, util), `kg/` (+ `vendors/infSign.min.js`, `temp/`),
-  `tx/` (+ `utils/crypto.js`), `wy/` (+ `utils/crypto.js`), `mg/` (+ `utils/mrc.js`), `xm.js` (single file),
-  `bd/` (present, disabled).
-- `options.js`, `utils.js` — shared scraper helpers.
-
-## 5. DB worker — `src/main/worker/dbService/`
-
-| Path | Role |
+### store（无 Pinia）
+| 路径 | 作用 |
 | --- | --- |
-| `db.ts` | Open `better-sqlite3`, WAL, table creation/verification, migrations. |
-| `tables.ts` | Table DDL. |
-| `modules/index.ts` | Aggregates table modules into the `dbService` API surface. |
-| `modules/{list,lyric,music_url,music_other_source,download,dislike_list}/` | Per-table CRUD (folders; `list` covers both `my_list` and `my_list_music_info`). |
+| `store/index.ts` | 全局：`proxy`、`sync`、`windowSize*`、`isFullscreen`、`theme*`、`isShowPact` |
+| `store/setting.ts` | `appSetting` + `updateSetting` + 常用 setter |
+| `store/player/` | `state`（playMusicInfo/musicInfo/playedList/tempPlayList）、`action`、`lyric`、`volume`、`playProgress`、`playbackRate` |
+| `store/list/` | 列表状态与 CRUD；`listManage/` 负责内存缓存与渲染进程 worker 协作 |
+| `store/dislikeList/` | 不喜欢列表状态（同步特性） |
+| `store/soundEffect.ts` | EQ/卷积/声像/变速参数 |
+| `store/utils.ts` | 主题构建与切换工具 |
 
-`worker/utils/worker.ts` starts a `worker_threads.Worker` and wraps it with `comlink.wrap`, so callers
-use `await global.lx.worker.dbService.<method>(...)` as if it were a local object.
-
-## 6. Desktop-lyric renderer — `src/renderer-lyric/`
-
-A minimal standalone Vue app: `main.ts`, `App.vue`, `core/` (`lyric.ts` animation, `mainWindowChannel.ts`
-MessagePort bridge), `store/` (`action.ts`, `lyric`), `components/`, `plugins/i18n`, `utils/ipc.ts`.
-Receives play/lyric status from main (via IPC + MessagePort) and renders the floating lyric.
-
-## 7. Build & packaging — `build-config/`
-
-| Path | Role |
+### views
+| 路径 | 作用 |
 | --- | --- |
-| `pack.js` | Top-level build orchestrator (runs `npm run build`). |
-| `build-pack.js` | electron-builder packer (target/arch/type from argv). |
-| `main/webpack.config.{base,dev,prod}.js` | Main bundle (target Node). |
-| `renderer/webpack.config.*.js` | Main-window renderer bundle. |
-| `renderer-lyric/webpack.config.*.js` | Lyric-window bundle. |
-| `renderer-scripts/webpack.config.*.js` | Bundles user-API default scripts. |
-| `runner-dev.js` | Dev server (webpack-dev-server + hot-middleware) + launches Electron. |
-| `vue-loader.config.js`, `css-loader.config.js`, `utils.js` | Shared loader/tooling config. |
-| `build-{before,after}-pack.js`, `post-install.js`, `dependencies-patch.js`, `lib-update.js` | Packaging hooks & dep maintenance. |
-| `lib/` | Vendored build helpers. |
+| `views/List/` | 我的列表（`MyList/`）+ 歌曲列表（`MusicList/`）：导入文件夹/文件、排序、去重、导入导出、右键菜单、列表内搜索 |
+| `views/Setting/` | 设置：`SettingBasic`（主题/语言/字体/窗口/控制按钮位置）、`SettingPlay`、`SettingPlayDetail`、`SettingDesktopLyric`、`SettingList`、`SettingSync/`（含 `MusicFileSync.vue`）、`SettingHotKey`、`SettingNetwork`（代理）、`SettingBackup`、`SettingOther`、`SettingAbout`，以及 `ThemeEditModal/` |
 
-## 8. Other top-level
+### components / plugins / worker
+| 路径 | 作用 |
+| --- | --- |
+| `components/layout/{Aside,Toolbar,PlayBar,PlayDetail}/` | 主框架：侧栏（导航 + 左上 logo/窗口按钮）、工具栏（**页面标题 + 右上角窗口按钮**）、播放栏、播放详情页 |
+| `components/layout/{PactModal,SyncModeModal,SyncAuthCodeModal,Icons,View}.vue` | 协议弹窗、同步弹窗、图标 sprite、路由出口 |
+| `components/base/` | 基础控件：`Btn Checkbox Input Menu MusicList Popup Selection SliderBar Tab VirtualizedList` |
+| `components/common/` | 通用业务控件：`ListAddModal`、`PlaybackRateBtn`、`ProgressBar`、`SoundEffectBtn/`、`TogglePlayModeBtn`、`VolumeBtn`、`AudioVisualizer` 等 |
+| `components/material/` | 列表行按钮、排序等列表物料（`ListButtons.vue` 已无下载按钮） |
+| `plugins/player/` | 音频引擎（HTMLAudioElement + Web Audio：EQ、卷积、声像、变速、analyser） |
+| `plugins/{Dialog,SvgIcon,Tips}/` | 对话框、图标、提示 |
+| `worker/main/` | 渲染进程 Web Worker：`list.ts`（本地文件解析、排序/过滤/去重、导入导出）、`music.ts`（内嵌封面/歌词）、`common.ts` |
+| `event/` | `window.app_event`（渲染进程事件总线） |
 
-- `src/lang/` — i18n string bundles.
-- `src/static/` — static assets copied next to the packaged app (`global.staticPath`).
-- `dist/` — webpack output; `dist/main.js` is the packaged entry.
+## 5. 桌面歌词窗口 — `src/renderer-lyric/`
+
+| 路径 | 作用 |
+| --- | --- |
+| `main.ts` | 独立 Vue 入口 |
+| `core/mainWindowChannel.ts` | 与主窗口的 `MessagePort` 通道（歌词/状态/偏移/播放速率） |
+| `components/` | 歌词行渲染、字体效果 |
+| `store/` `useApp/` `plugins/` | 歌词窗口自己的状态与插件 |
+
+主进程侧：`src/main/modules/winLyric/{index,main,config,rendererEvent,utils,mouseCheckTools}.ts`。
+
+## 6. 构建与打包 — `build-config/`
+
+| 路径 | 作用 |
+| --- | --- |
+| `pack.js` | 并行构建三个 bundle（main / renderer / renderer-lyric）到 `dist/` |
+| `runner-dev.js` | 开发服务器 + 启动 Electron（**启动子进程前移除 `ELECTRON_RUN_AS_NODE`**） |
+| `build-pack.js` | electron-builder 打包（target/arch/type 来自 argv） |
+| `main/webpack.config.{base,dev,prod}.js` | 主进程 bundle（target Node） |
+| `renderer/webpack.config.*.js` | 主窗口 bundle |
+| `renderer-lyric/webpack.config.*.js` | 歌词窗口 bundle |
+| `build-{before,after}-pack.js`、`post-install.js`、`dependencies-patch.js`、`lib-update.js` | 打包钩子与依赖维护 |
+| `lib/` | vendor 的构建辅助 |
+
+无 `renderer-scripts` 目标（userApi 默认脚本已随功能删除）。
+
+## 7. 其他
+
+- `src/lang/` — i18n 文案（`zh-cn` / `zh-tw` / `en-us` / `ko-kr`）
+- `src/static/` — 打包时复制到应用旁的静态资源（`global.staticPath`）
+- `doc/music-file-sync/本地音乐文件同步-设计.md` — musicFile 同步契约
+- `tests/` — musicFile 同步纯逻辑测试（node 直接运行，不进 bundle、不参与 lint）
+- `dist/` — webpack 输出（`dist/main.js` 是打包入口）
