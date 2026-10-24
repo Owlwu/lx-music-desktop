@@ -8,7 +8,7 @@ export const initDislikeInfo = async() => {
   action.initDislikeInfo(await rendererInvoke<LX.Dislike.DislikeInfo>(DISLIKE_EVENT_NAME.get_dislike_music_infos))
 }
 
-export const hasDislike = (info: LX.Music.MusicInfo | LX.Download.ListItem | null) => {
+export const hasDislike = (info: LX.Music.MusicInfo | null) => {
   if (!info) return false
   return action.hasDislike(info)
 }

@@ -63,7 +63,6 @@ import {
   setMusicInfo,
   setShowPlayerDetail,
 } from '@renderer/store/player/action'
-import { appSetting } from '@renderer/store/setting'
 import { togglePlay, playNext, playPrev } from '@renderer/core/player'
 import { LIST_IDS } from '@common/constants'
 import { formatMusicName } from '@renderer/utils'
@@ -113,7 +112,7 @@ export default {
 
     const title = computed(() => {
       return musicInfo.name
-        ? formatMusicName(appSetting['download.fileName'], musicInfo.name, musicInfo.singer)
+        ? formatMusicName('歌名 - 歌手', musicInfo.name, musicInfo.singer)
         : ''
     })
 

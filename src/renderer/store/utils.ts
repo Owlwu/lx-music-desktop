@@ -1,19 +1,10 @@
-// import { getListFromState } from './list'
-// import { downloadList } from './download'
 
-
-// export const getList = (listId: string | null): LX.Download.ListItem[] | LX.Music.MusicInfo[] => {
-//   return listId == 'download' ? downloadList : getListFromState(listId)
-// }
 import { encodePath, isUrl } from '@common/utils/common'
 import { joinPath } from '@common/utils/nodejs'
 import { markRaw, shallowReactive } from '@common/utils/vueTools'
 import { getThemes as getTheme } from '@renderer/utils/ipc'
-import { qualityList, themeInfo, themeShouldUseDarkColors } from './index'
+import { themeInfo, themeShouldUseDarkColors } from './index'
 
-export const assertApiSupport = (source: LX.Source): boolean => {
-  return source == 'local' || qualityList.value[source] != null
-}
 
 export const buildBgUrl = (originUrl: string, dataPath: string): string => {
   return isUrl(originUrl)

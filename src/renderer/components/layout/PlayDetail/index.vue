@@ -6,7 +6,7 @@ transition(enter-active-class="animated slideInRight" leave-active-class="animat
     //- div(:class="$style.bg2")
     ControlBtnsLeftHeader(v-if="appSetting['common.controlBtnPosition'] == 'left'")
     ControlBtnsRightHeader(v-else)
-    div(:class="[$style.main, {[$style.showComment]: isShowPlayComment}]")
+    div(:class="$style.main")
       div.left(:class="$style.left")
         //- div(:class="$style.info")
         div(:class="$style.info")
@@ -18,7 +18,6 @@ transition(enter-active-class="animated slideInRight" leave-active-class="animat
 
       transition(enter-active-class="animated fadeIn" leave-active-class="animated fadeOut")
         LyricPlayer(v-if="visibled")
-      music-comment(v-if="visibled" :class="$style.comment" :show="isShowPlayComment" :music-info="playMusicInfo.musicInfo" @close="hideComment")
     transition(enter-active-class="animated fadeIn" leave-active-class="animated fadeOut")
       play-bar(v-if="visibled")
     transition(enter-active-class="animated-slow fadeIn" leave-active-class="animated-slow fadeOut")
@@ -31,18 +30,18 @@ import { ref, watch } from '@common/utils/vueTools'
 import { isFullscreen } from '@renderer/store'
 import {
   isShowPlayerDetail,
-  isShowPlayComment,
+
   musicInfo,
   playMusicInfo,
 } from '@renderer/store/player/state'
 import {
   setShowPlayerDetail,
-  setShowPlayComment,
+
   setShowPlayLrcSelectContentLrc,
 } from '@renderer/store/player/action'
 import LyricPlayer from './LyricPlayer.vue'
 import PlayBar from './PlayBar.vue'
-import MusicComment from './components/MusicComment/index.vue'
+
 import ControlBtnsLeftHeader from './ControlBtnsLeftHeader.vue'
 import ControlBtnsRightHeader from './ControlBtnsRightHeader.vue'
 import { registerAutoHideMounse, unregisterAutoHideMounse } from './autoHideMounse'
@@ -56,7 +55,7 @@ export default {
     ControlBtnsRightHeader,
     LyricPlayer,
     PlayBar,
-    MusicComment,
+
   },
   setup() {
     const visibled = ref(false)
@@ -75,9 +74,6 @@ export default {
       hide()
     }
 
-    const hideComment = () => {
-      setShowPlayComment(false)
-    }
 
     const handleAfterEnter = () => {
       if (isFullscreen.value) registerAutoHideMounse()
@@ -87,7 +83,7 @@ export default {
 
     const handleAfterLeave = () => {
       setShowPlayLrcSelectContentLrc(false)
-      hideComment(false)
+
       visibled.value = false
 
       unregisterAutoHideMounse()
@@ -102,11 +98,11 @@ export default {
       appSetting,
       playMusicInfo,
       isShowPlayerDetail,
-      isShowPlayComment,
+
       musicInfo,
       hide,
       handleContextMenu,
-      hideComment,
+
       handleAfterEnter,
       handleAfterLeave,
       visibled,

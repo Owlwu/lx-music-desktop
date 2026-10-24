@@ -15,18 +15,10 @@ window.lx = {
       keys: {},
     },
   },
-  songListInfo: {
-    fromName: '',
-    searchKey: '',
-    searchPosition: 0,
-    songlistKey: '',
-    songlistPosition: 0,
-  },
   restorePlayInfo: null,
   worker: createWorkers(),
   isProd: process.env.NODE_ENV == 'production',
   rootOffset: window.dt ? 0 : 8,
-  apiInitPromise: [Promise.resolve(false), true, () => {}],
 }
 
 window.lxData = {}

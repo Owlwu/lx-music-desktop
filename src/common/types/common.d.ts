@@ -52,7 +52,6 @@ declare namespace LX {
   type QualityList = Partial<Record<LX.Source, LX.Quality[]>>
 
   interface EnvParams {
-    deeplink?: string | null
     cmdParams: CmdParams
     workAreaSize?: Electron.Size
   }

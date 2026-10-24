@@ -53,37 +53,12 @@ declare namespace LX {
       source: 'raw' | 'edited'
     }
 
-    interface MusicUrlInfo {
-      id: string
-      url: string
-    }
-
-    interface DownloadMusicInfo {
-      id: string
-      isComplate: 0 | 1
-      status: LX.Download.DownloadTaskStatus
-      statusText: string
-      progress_downloaded: number
-      progress_total: number
-      url: string | null
-      quality: LX.Quality
-      ext: LX.Download.FileExt
-      fileName: string
-      filePath: string
-      musicInfo: string
-      position: number
-    }
-
     interface DislikeInfo {
       // type: 'music'
       content: string
       // meta: string | null
     }
 
-    interface MusicInfoOtherSource extends Omit<MusicInfoOnline, 'listId'> {
-      source_id: string
-      order: number
-    }
 
   }
 }

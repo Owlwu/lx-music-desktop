@@ -18,7 +18,6 @@ module.exports = merge(baseConfig, {
         NODE_ENV: '"development"',
       },
       webpackStaticPath: `"${path.join(__dirname, '../../src/static').replace(/\\/g, '\\\\')}"`,
-      webpackUserApiPath: `"${path.join(__dirname, '../../src/main/modules/userApi').replace(/\\/g, '\\\\')}"`,
     }),
   ],
   performance: {

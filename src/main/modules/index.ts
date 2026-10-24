@@ -1,4 +1,3 @@
-import registerUserApi from './userApi'
 import registerWinMain from './winMain'
 import registerHotKey from './hotKey'
 import registerTray from './tray'
@@ -9,7 +8,6 @@ import registerCommonRenderers from './commonRenderers'
 let isRegistered = false
 export default () => {
   if (isRegistered) return
-  registerUserApi()
   registerCommonRenderers()
   registerWinMain()
   registerHotKey()

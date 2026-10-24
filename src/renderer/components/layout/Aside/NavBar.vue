@@ -29,33 +29,6 @@ export default {
       const size = iconSize.value
       return [
         {
-          to: '/search',
-          tips: t('search'),
-          icon: '#icon-search-2',
-          iconSize: '0 0 425.2 425.2',
-          size,
-          name: 'Search',
-          enable: true,
-        },
-        {
-          to: '/songList/list',
-          tips: t('song_list'),
-          icon: '#icon-album',
-          iconSize: '0 0 425.2 425.2',
-          size,
-          name: 'SongList',
-          enable: true,
-        },
-        {
-          to: '/leaderboard',
-          tips: t('leaderboard'),
-          icon: '#icon-leaderboard',
-          iconSize: '0 0 425.22 425.2',
-          size,
-          name: 'Leaderboard',
-          enable: true,
-        },
-        {
           to: '/list',
           tips: t('my_list'),
           icon: '#icon-love',
@@ -63,15 +36,6 @@ export default {
           size,
           name: 'List',
           enable: true,
-        },
-        {
-          to: '/download',
-          tips: t('download'),
-          icon: '#icon-download-2',
-          iconSize: '0 0 425.2 425.2',
-          size,
-          enable: appSetting['download.enable'],
-          name: 'Download',
         },
         {
           to: '/setting',

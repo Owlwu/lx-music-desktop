@@ -94,10 +94,6 @@ export const setTogglePlayMode = (mode: LX.AppSetting['player.togglePlayMethod']
  * 设置API id
  * @param sourceId
  */
-export const setApiSource = (sourceId: string) => {
-  updateSetting({ 'common.apiSource': sourceId })
-}
-
 /**
  * 设置播放详情页歌词字体大小
  * @param size 字体大小

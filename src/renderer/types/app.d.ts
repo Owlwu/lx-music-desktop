@@ -1,6 +1,6 @@
 /* eslint-disable no-var */
 import { type AppEventTypes, type KeyEventTypes } from '@renderer/event'
-import { type MainTypes, type DownloadTypes } from '@renderer/worker/utils'
+import { type MainTypes } from '@renderer/worker/utils'
 import { type I18n } from '@renderer/plugins/i18n'
 // interface LX.EnvParams {
 //   deeplink?: string | null
@@ -17,18 +17,9 @@ interface Lx {
   restorePlayInfo: LX.Player.SavedPlayInfo | null
   worker: {
     main: MainTypes
-    download: DownloadTypes
   }
   isProd: boolean
-  songListInfo: {
-    fromName: string
-    searchKey: string | null
-    searchPosition?: number
-    songlistKey: string | null
-    songlistPosition?: number
-  }
   rootOffset: number
-  apiInitPromise: [Promise<boolean>, boolean, (success: boolean) => void]
 }
 
 declare global {

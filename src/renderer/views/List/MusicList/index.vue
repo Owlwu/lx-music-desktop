@@ -28,7 +28,7 @@
         @scroll="saveListPosition" @contextmenu.capture="handleListRightClick"
       >
         <div
-          class="list-item" :class="[{ [$style.active]: playerInfo.isPlayList && playerInfo.playIndex === index }, { selected: selectedIndex == index || rightClickSelectedIndex == index }, { active: selectedList.includes(item) }, { disabled: !assertApiSupport(item.source) }]"
+          class="list-item" :class="[{ [$style.active]: playerInfo.isPlayList && playerInfo.playIndex === index }, { selected: selectedIndex == index || rightClickSelectedIndex == index }, { active: selectedList.includes(item) }]"
           @click="handleListItemClick($event, index)" @contextmenu="handleListItemRightClick($event, index)"
         >
           <div class="list-item-cell no-select" :class="$style.num" style="flex: 0 0 5%;">
@@ -49,7 +49,7 @@
           <div class="list-item-cell" style="flex: 0 0 22%;"><span class="select" :aria-label="item.meta.albumName">{{ item.meta.albumName }}</span></div>
           <div class="list-item-cell" style="flex: 0 0 9%;"><span class="no-select">{{ item.interval || '--/--' }}</span></div>
           <div class="list-item-cell" style="flex: 0 0 16%; padding-left: 0; padding-right: 0;">
-            <material-list-buttons :index="index" :download-btn="assertApiSupport(item.source) && item.source != 'local'" @btn-click="handleListBtnClick" />
+            <material-list-buttons :index="index" @btn-click="handleListBtnClick" />
           </div>
         </div>
       </base-virtualized-list>
@@ -60,7 +60,7 @@
       >
         <div
           class="list-item"
-          :class="[{ [$style.active]: playerInfo.isPlayList && playerInfo.playIndex === index }, { selected: selectedIndex == index || rightClickSelectedIndex == index }, { active: selectedList.includes(item) }, { disabled: !assertApiSupport(item.source) }]"
+          :class="[{ [$style.active]: playerInfo.isPlayList && playerInfo.playIndex === index }, { selected: selectedIndex == index || rightClickSelectedIndex == index }, { active: selectedList.includes(item) }]"
           @click="handleListItemClick($event, index)" @contextmenu="handleListItemRightClick($event, index)"
         >
           <div class="list-item-cell no-select" :class="$style.num" style="flex: 0 0 5%;">
@@ -94,39 +94,31 @@
       v-model:show="isShowListAddMultiple" :from-list-id="listId"
       :is-move="isMoveMultiple" :music-list="selectedList" :exclude-list-id="excludeListIds" teleport="#view" @confirm="removeAllSelect"
     />
-    <common-download-modal v-model:show="isShowDownload" :music-info="selectedDownloadMusicInfo" teleport="#view" :list-id="listId" />
-    <common-download-multiple-modal v-model:show="isShowDownloadMultiple" :list="selectedList" teleport="#view" :list-id="listId" @confirm="removeAllSelect" />
     <search-list :list="list" :visible="isShowSearchBar" @action="handleMusicSearchAction" />
     <music-sort-modal v-model:show="isShowMusicSortModal" :music-info="selectedSortMusicInfo" :selected-num="selectedNum" @confirm="sortMusic" />
-    <music-toggle-modal v-model:show="isShowMusicToggleModal" :music-info="selectedToggleMusicInfo" @toggle="toggleSource" />
     <base-menu v-model="isShowItemMenu" :menus="menus" :xy="menuLocation" item-name="name" @menu-click="handleMenuClick" />
   </div>
 </template>
 
 <script>
 import { clipboardWriteText } from '@common/utils/electron'
-import { assertApiSupport } from '@renderer/store/utils'
 import SearchList from './components/SearchList.vue'
 import MusicSortModal from './components/MusicSortModal.vue'
-import MusicToggleModal from './components/MusicToggleModal.vue'
 import useListInfo from './useListInfo'
 import useList from './useList'
 import useMenu from './useMenu'
 import usePlay from './usePlay'
-import useMusicDownload from './useMusicDownload'
 import useMusicAdd from './useMusicAdd'
 import useSort from './useSort'
 import useMusicActions from './useMusicActions'
 import useSearch from './useSearch'
 import useListScroll from './useListScroll'
-import useMusicToggle from './useMusicToggle'
 import { appSetting } from '@renderer/store/setting'
 export default {
   name: 'MusicList',
   components: {
     SearchList,
     MusicSortModal,
-    MusicToggleModal,
   },
   props: {
     listId: {
@@ -187,13 +179,6 @@ export default {
     } = useMusicAdd({ selectedList, list })
 
     const {
-      isShowDownload,
-      isShowDownloadMultiple,
-      selectedDownloadMusicInfo,
-      handleShowDownloadModal,
-    } = useMusicDownload({ selectedList, list })
-
-    const {
       isShowMusicSortModal,
       selectedNum,
       selectedSortMusicInfo,
@@ -202,15 +187,6 @@ export default {
     } = useSort({ props, list, selectedList, removeAllSelect })
 
     const {
-      handleShowMusicToggleModal,
-      isShowMusicToggleModal,
-      selectedToggleMusicInfo,
-      toggleSource,
-    } = useMusicToggle(props, list)
-
-    const {
-      handleSearch,
-      handleOpenMusicDetail,
       handleCopyName,
       handleOpenFolder,
       handleDislikeMusic,
@@ -224,18 +200,13 @@ export default {
       showMenu,
       menuClick,
     } = useMenu({
-      assertApiSupport,
       emit,
 
-      handleShowDownloadModal,
       handlePlayMusic,
       handlePlayMusicLater,
-      handleShowMusicToggleModal,
-      handleSearch,
       handleShowMusicAddModal,
       handleShowMusicMoveModal,
       handleShowSortModal,
-      handleOpenMusicDetail,
       handleCopyName,
       handleOpenFolder,
       handleDislikeMusic,
@@ -284,14 +255,8 @@ export default {
     }
     const handleListBtnClick = ({ action, index }) => {
       switch (action) {
-        case 'download':
-          handleShowDownloadModal(index, true)
-          break
         case 'play':
           handlePlayMusic(index, true)
-          break
-        case 'search':
-          handleSearch(index)
           break
         case 'listAdd':
           handleShowMusicAddModal(index, true)
@@ -321,7 +286,6 @@ export default {
       handleMenuClick,
 
       handleListRightClick,
-      assertApiSupport,
 
       isShowListAdd,
       isMove,
@@ -333,10 +297,6 @@ export default {
       selectedNum,
       selectedSortMusicInfo,
       sortMusic,
-
-      isShowDownload,
-      isShowDownloadMultiple,
-      selectedDownloadMusicInfo,
 
       scrollToTop,
 
@@ -353,9 +313,6 @@ export default {
 
       actionButtonsVisible,
 
-      isShowMusicToggleModal,
-      selectedToggleMusicInfo,
-      toggleSource,
     }
   },
 }

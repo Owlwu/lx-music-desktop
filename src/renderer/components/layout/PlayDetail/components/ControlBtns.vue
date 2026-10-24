@@ -11,9 +11,6 @@ div(:class="$style.footerLeftControlBtns")
   button(:class="[$style.footerLeftControlBtn, { [$style.active]: isShowLrcSelectContent }]" :aria-label="$t('lyric__select')" @click="toggleVisibleLrc")
     svg(version="1.1" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" width="95%" viewBox="0 0 24 24" space="preserve")
       use(xlink:href="#icon-text")
-  button(:class="[$style.footerLeftControlBtn, {[$style.active]: isShowPlayComment}]" :aria-label="$t('comment__show')" @click="toggleVisibleComment")
-    svg(version="1.1" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" width="95%" viewBox="0 0 24 24" space="preserve")
-      use(xlink:href="#icon-comment")
   common-sound-effect-btn
   common-playback-rate-btn
   common-volume-btn
@@ -31,12 +28,12 @@ import { useI18n } from '@renderer/plugins/i18n'
 
 import {
   isShowLrcSelectContent,
-  isShowPlayComment,
+
   playMusicInfo,
 } from '@renderer/store/player/state'
 import {
   setShowPlayLrcSelectContentLrc,
-  setShowPlayComment,
+
 } from '@renderer/store/player/action'
 
 import useNextTogglePlay from '@renderer/utils/compositions/useNextTogglePlay'
@@ -55,9 +52,7 @@ export default {
     const toggleVisibleLrc = () => {
       setShowPlayLrcSelectContentLrc(!isShowLrcSelectContent.value)
     }
-    const toggleVisibleComment = () => {
-      setShowPlayComment(!isShowPlayComment.value)
-    }
+
     const {
       nextTogglePlayName,
       toggleNextPlayMode,
@@ -90,8 +85,7 @@ export default {
       appSetting,
       isShowLrcSelectContent,
       toggleVisibleLrc,
-      isShowPlayComment,
-      toggleVisibleComment,
+
       nextTogglePlayName,
       toggleNextPlayMode,
       toggleDesktopLyricBtnTitle,

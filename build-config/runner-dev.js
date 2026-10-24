@@ -13,7 +13,6 @@ const webpackHotMiddleware = require('webpack-hot-middleware')
 const mainConfig = require('./main/webpack.config.dev')
 const rendererConfig = require('./renderer/webpack.config.dev')
 const rendererLyricConfig = require('./renderer-lyric/webpack.config.dev')
-const rendererScriptConfig = require('./renderer-scripts/webpack.config.dev')
 const { Arch } = require('electron-builder')
 const replaceLib = require('./build-before-pack')
 const treeKill = require('tree-kill')
@@ -120,22 +119,6 @@ function startRendererLyric() {
   })
 }
 
-function startRendererScripts() {
-  return new Promise((resolve, reject) => {
-    // mainConfig.entry.main = [path.join(__dirname, '../src/main/index.dev.js')].concat(mainConfig.entry.main)
-    // mainConfig.mode = 'development'
-    const compiler = webpack(rendererScriptConfig)
-
-    compiler.watch({}, (err, stats) => {
-      if (err) {
-        console.log(err)
-        return
-      }
-      resolve()
-    })
-  })
-}
-
 function startMain() {
   let firstRun = true
   return new Promise((resolve, reject) => {
@@ -184,7 +167,13 @@ function startElectron() {
     args = args.concat(process.argv.slice(2))
   }
 
-  electronProcess = spawn(electron, args)
+  // 某些环境（编辑器内置终端、CI、部分 agent 沙箱）会注入 ELECTRON_RUN_AS_NODE=1，
+  // 这会让 electron 以纯 Node 运行并抛出 "Not running in an Electron environment!"，
+  // 因此启动子进程前显式移除该变量。
+  const electronEnv = { ...process.env }
+  delete electronEnv.ELECTRON_RUN_AS_NODE
+
+  electronProcess = spawn(electron, args, { env: electronEnv })
 
   electronProcess.stdout.on('data', data => {
     electronLog(data, 'blue')
@@ -222,7 +211,6 @@ function init() {
   spinners.add('main', { text: 'main compiling' })
   spinners.add('renderer', { text: 'renderer compiling' })
   spinners.add('renderer-lyric', { text: 'renderer-lyric compiling' })
-  spinners.add('renderer-scripts', { text: 'renderer-scripts compiling' })
   function handleSuccess(name) {
     spinners.succeed(name, { text: name + ' compile success!' })
   }
@@ -240,10 +228,7 @@ function init() {
       console.error(err.message)
       return handleFail('renderer-lyric')
     }),
-    startRendererScripts().then(() => handleSuccess('renderer-scripts')).catch((err) => {
-      console.error(err.message)
-      return handleFail('renderer-scripts')
-    }),
+
     startMain().then(() => handleSuccess('main')).catch(() => handleFail('main')),
   ]).then(startElectron).catch(err => {
     console.error(err)

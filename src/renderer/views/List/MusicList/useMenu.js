@@ -1,21 +1,15 @@
 import { computed, ref, shallowReactive, reactive, nextTick } from '@common/utils/vueTools'
-import musicSdk from '@renderer/utils/musicSdk'
 import { useI18n } from '@renderer/plugins/i18n'
 import { hasDislike } from '@renderer/core/dislikeList'
 
 export default ({
-  assertApiSupport,
   emit,
 
-  handleShowDownloadModal,
   handlePlayMusic,
   handlePlayMusicLater,
-  handleSearch,
-  handleShowMusicToggleModal,
   handleShowMusicAddModal,
   handleShowMusicMoveModal,
   handleShowSortModal,
-  handleOpenMusicDetail,
   handleCopyName,
   handleOpenFolder,
   handleDislikeMusic,
@@ -29,12 +23,8 @@ export default ({
     addTo: true,
     moveTo: true,
     sort: true,
-    toggleSource: true,
-    download: true,
-    search: true,
     dislike: true,
     remove: true,
-    sourceDetail: true,
   })
   const t = useI18n()
   const menuLocation = shallowReactive({ x: 0, y: 0 })
@@ -46,11 +36,6 @@ export default ({
         name: t('list__play'),
         action: 'play',
         disabled: !itemMenuControl.play,
-      },
-      {
-        name: t('list__download'),
-        action: 'download',
-        disabled: !itemMenuControl.download,
       },
       {
         name: t('list__play_later'),
@@ -73,11 +58,6 @@ export default ({
         disabled: !itemMenuControl.sort,
       },
       {
-        name: t('list__toggle_source'),
-        action: 'toggleSource',
-        disabled: !itemMenuControl.toggleSource,
-      },
-      {
         name: t('list__copy_name'),
         action: 'copyName',
         disabled: !itemMenuControl.copyName,
@@ -86,16 +66,6 @@ export default ({
         name: t('list__open_folder'),
         action: 'openFolder',
         disabled: !itemMenuControl.openFolder,
-      },
-      {
-        name: t('list__source_detail'),
-        action: 'sourceDetail',
-        disabled: !itemMenuControl.sourceDetail,
-      },
-      {
-        name: t('list__search'),
-        action: 'search',
-        disabled: !itemMenuControl.search,
       },
       {
         name: t('list__dislike'),
@@ -111,11 +81,6 @@ export default ({
   })
 
   const showMenu = (event, musicInfo) => {
-    itemMenuControl.sourceDetail = !!musicSdk[musicInfo.source]?.getMusicDetailPageUrl
-    // itemMenuControl.play =
-    //   itemMenuControl.playLater =
-    itemMenuControl.download = assertApiSupport(musicInfo.source) && musicInfo.source != 'local'
-
     itemMenuControl.dislike = !hasDislike(musicInfo)
 
     menuLocation.x = event.pageX
@@ -134,7 +99,6 @@ export default ({
   }
 
   const menuClick = (action, index) => {
-    // console.log(action)
     hideMenu()
     if (!action) return
     switch (action.action) {
@@ -159,23 +123,12 @@ export default ({
       case 'sort':
         handleShowSortModal(index)
         break
-      case 'toggleSource':
-        handleShowMusicToggleModal(index)
-        break
-      case 'download':
-        handleShowDownloadModal(index)
-        break
-      case 'search':
-        handleSearch(index)
-        break
       case 'dislike':
         handleDislikeMusic(index)
         break
       case 'remove':
         handleRemoveMusic(index)
         break
-      case 'sourceDetail':
-        handleOpenMusicDetail(index)
     }
   }
 

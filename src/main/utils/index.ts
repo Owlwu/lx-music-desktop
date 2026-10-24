@@ -1,23 +1,18 @@
 import { encodePath, isUrl, throttle, isMac } from '@common/utils'
 import migrateSetting from '@common/utils/migrateSetting'
 import getStore from '@main/utils/store'
-import { STORE_NAMES, URL_SCHEME_RXP } from '@common/constants'
+import { STORE_NAMES } from '@common/constants'
 import defaultSetting from '@common/defaultSetting'
 import defaultHotKey from '@common/defaultHotKey'
-import { migrateDataJson, migrateHotKey, migrateUserApi, parseDataFile } from './migrate'
+import { migrateDataJson, migrateHotKey, parseDataFile } from './migrate'
 import { nativeTheme, powerSaveBlocker } from 'electron'
 import { joinPath } from '@common/utils/nodejs'
 import themes from '@common/theme/index.json'
 
-export const parseEnvParams = (argv = process.argv): { cmdParams: LX.CmdParams, deeplink: string | null } => {
+export const parseEnvParams = (argv = process.argv): { cmdParams: LX.CmdParams } => {
   const cmdParams: LX.CmdParams = {}
-  let deeplink = null
   const rx = /^-\w+/
   for (let param of argv) {
-    if (URL_SCHEME_RXP.test(param)) {
-      deeplink = param
-    }
-
     if (!rx.test(param)) continue
     param = param.substring(1)
     let index = param.indexOf('=')
@@ -29,7 +24,6 @@ export const parseEnvParams = (argv = process.argv): { cmdParams: LX.CmdParams, 
   }
   return {
     cmdParams,
-    deeplink,
   }
 }
 
@@ -143,7 +137,7 @@ export const initSetting = async() => {
   if (!setting) {
     const config = await parseDataFile<{ setting?: any }>('config.json')
     if (config?.setting) setting = config.setting as LX.AppSetting
-    await migrateUserApi()
+
     await migrateDataJson()
   }
 

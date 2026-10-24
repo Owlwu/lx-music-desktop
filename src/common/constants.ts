@@ -1,5 +1,3 @@
-export const URL_SCHEME_RXP = /^lxmusic:\/\//
-
 export const SPLIT_CHAR = {
   DISLIKE_NAME: '@',
   DISLIKE_NAME_ALIAS: '#',
@@ -10,7 +8,6 @@ export const STORE_NAMES = {
   DATA: 'data',
   SYNC: 'sync',
   HOTKEY: 'hot_key',
-  USER_API: 'user_api',
   LRC_RAW: 'lyrics',
   LRC_EDITED: 'lyrics_edited',
   THEME: 'theme',
@@ -27,7 +24,6 @@ export const LIST_IDS = {
   DEFAULT: 'default',
   LOVE: 'love',
   TEMP: 'temp',
-  DOWNLOAD: 'download',
   PLAY_LATER: null,
 } as const
 
@@ -37,48 +33,14 @@ export const DATA_KEYS = {
   searchHistoryList: 'searchHistoryList',
   listScrollPosition: 'listScrollPosition',
   listPrevSelectId: 'listPrevSelectId',
-  listUpdateInfo: 'listUpdateInfo',
-  ignoreVersion: 'ignoreVersion',
-
-  leaderboardSetting: 'leaderboardSetting',
-  songListSetting: 'songListSetting',
-  searchSetting: 'searchSetting',
-
   lastStartInfo: 'lastStartInfo',
 } as const
 
 export const DEFAULT_SETTING = {
-  leaderboard: {
-    source: 'kw',
-    boardId: 'kw__16',
-  },
-
-  songList: {
-    source: 'kw',
-    sortId: 'new',
-    tagId: '',
-  },
-
-  search: {
-    temp_source: 'kw',
-    source: 'all',
-    type: 'music',
-  },
-
   viewPrevState: {
-    url: '/search',
+    url: '/list',
     query: {},
   },
 }
-
-export const DOWNLOAD_STATUS = {
-  RUN: 'run',
-  WAITING: 'waiting',
-  PAUSE: 'pause',
-  ERROR: 'error',
-  COMPLETED: 'completed',
-} as const
-
-export const QUALITYS = ['flac24bit', 'flac', 'wav', 'ape', '320k', '192k', '128k'] as const
 
 export const TRAY_AUTO_ID = -1

@@ -35,19 +35,6 @@ dd
         span(:class="$style.label") {{ $t('theme_more_btn_show') }}
         svg-icon(name="angle-right-solid" :class="$style.activeIcon")
 
-dd
-  h3#basic_source {{ $t('setting__basic_source') }}
-  div
-    .gap-top(v-for="item in apiSources" :key="item.id")
-      base-checkbox(
-        :id="`setting_api_source_${item.id}`" name="setting_api_source"
-        need :model-value="appSetting['common.apiSource']" :disabled="item.disabled" :value="item.id" :aria-label="item.label" @update:model-value="updateSetting({'common.apiSource': $event})")
-        span(:class="$style.sourceLabel")
-          | {{ item.name }}
-          span(v-if="item.desc" :class="$style.desc") {{ item.desc }}
-          span(v-if="item.statusLabel" :class="$style.status") {{ item.statusLabel }}
-    .p.gap-top
-      base-btn.btn(min @click="isShowUserApiModal = true") {{ $t('setting__basic_source_user_api_btn') }}
 
 dd
   h3#basic_window_size {{ $t('setting__basic_window_size') }}
@@ -81,12 +68,6 @@ dd
       need :model-value="appSetting['common.langId']" :value="item.locale" :label="item.name" @update:model-value="updateSetting({'common.langId': $event})")
 
 dd
-  h3#basic_sourcename {{ $t('setting__basic_sourcename') }}
-  div
-    base-checkbox.gap-left(
-      v-for="item in sourceNameTypes" :id="`setting_abasic_sourcename_${item.id}`" :key="item.id"
-      name="setting_basic_sourcename" need :model-value="appSetting['common.sourceNameType']" :value="item.id" :label="item.label" @update:model-value="updateSetting({'common.sourceNameType': $event})")
-dd
   h3#basic_control_btn_position {{ $t('setting__basic_control_btn_position') }}
   div
     base-checkbox.gap-left(
@@ -108,22 +89,19 @@ dd
 ThemeSelectorModal(v-model="isShowThemeSelectorModal")
 ThemeEditModal(v-model="isShowThemeEditModal" :theme-id="editThemeId" @submit="handleRefreshTheme")
 play-timeout-modal(v-model="isShowPlayTimeoutModal")
-user-api-modal(v-model="isShowUserApiModal")
 </template>
 
 <script>
 import { computed, ref, watch, reactive, shallowReactive } from '@common/utils/vueTools'
-import { windowSizeList, userApi, isFullscreen, themeId } from '@renderer/store'
+import { windowSizeList, isFullscreen, themeId } from '@renderer/store'
 import { langList, useI18n } from '@root/lang'
 import { getSystemFonts } from '@renderer/utils/ipc'
-import apiSourceInfo from '@renderer/utils/musicSdk/api-source-info'
 import { useTimeout } from '@renderer/core/player/timeoutStop'
 import { dialog } from '@renderer/plugins/Dialog'
 
 import ThemeSelectorModal from './ThemeSelectorModal.vue'
 import ThemeEditModal from './ThemeEditModal/index.vue'
 import PlayTimeoutModal from './PlayTimeoutModal.vue'
-import UserApiModal from './UserApiModal.vue'
 import { appSetting, updateSetting } from '@renderer/store/setting'
 import { getThemes, applyTheme, findTheme, buildBgUrl } from '@renderer/store/utils'
 
@@ -133,7 +111,6 @@ export default {
     ThemeSelectorModal,
     ThemeEditModal,
     PlayTimeoutModal,
-    UserApiModal,
   },
   setup() {
     const t = useI18n()
@@ -249,43 +226,6 @@ export default {
     const isShowPlayTimeoutModal = ref(false)
     const { timeLabel } = useTimeout()
 
-    const isShowUserApiModal = ref(false)
-    const getApiStatus = () => {
-      let status
-      if (userApi.status) status = t('setting__basic_source_status_success')
-      else if (userApi.message == 'initing') status = t('setting__basic_source_status_initing')
-      else status = `${t('setting__basic_source_status_failed')}`
-
-      return status
-    }
-    const apiSources = computed(() => {
-      return [
-        ...apiSourceInfo.map(api => ({
-          id: api.id,
-          name: api.name,
-          label: api.name,
-          disabled: api.disabled,
-        })),
-        ...userApi.list.map(api => ({
-          id: api.id,
-          name: api.name,
-          label: `${api.name}${api.id == appSetting['common.apiSource'] ? `[${getApiStatus()}]` : ''}`,
-          desc: [/^\d/.test(api.version) ? `v${api.version}` : api.version].filter(Boolean).join(', '),
-          statusLabel: api.id == appSetting['common.apiSource'] ? `[${getApiStatus()}]` : '',
-          status: api.status,
-          message: api.message,
-          disabled: false,
-        })),
-      ]
-    })
-
-    const sourceNameTypes = computed(() => {
-      return [
-        { id: 'real', label: t('setting__basic_sourcename_real') },
-        { id: 'alias', label: t('setting__basic_sourcename_alias') },
-      ]
-    })
-
 
     const controlBtnPositionList = computed(() => {
       return [
@@ -334,6 +274,7 @@ export default {
       themeList,
       fonts,
       updateFonts,
+      fontList,
       // currentStting,
       // themes,
       // themeClassName,
@@ -342,13 +283,9 @@ export default {
       handleSetThemeAuto,
       isShowPlayTimeoutModal,
       timeLabel,
-      apiSources,
-      isShowUserApiModal,
       windowSizeList,
       langList,
-      sourceNameTypes,
       controlBtnPositionList,
-      fontList,
       isFullscreen,
       toggleTheme,
       themeId,

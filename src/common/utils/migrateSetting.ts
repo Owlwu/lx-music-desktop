@@ -48,8 +48,6 @@ export default (setting: any): Partial<LX.AppSetting> => {
     setting['common.windowSizeId'] = setting.windowSizeId
     setting['common.startInFullscreen'] = setting.startInFullscreen
     setting['common.langId'] = setting.langId
-    setting['common.apiSource'] = setting.apiSource
-    setting['common.sourceNameType'] = setting.sourceNameType
     setting['common.font'] = setting.font
     setting['common.isShowAnimation'] = setting.isShowAnimation
     setting['common.randomAnimate'] = setting.randomAnimate
@@ -99,19 +97,6 @@ export default (setting: any): Partial<LX.AppSetting> => {
     setting['list.isSaveScrollLocation'] = setting.list?.isSaveScrollLocation
     setting['list.addMusicLocationType'] = setting.list?.addMusicLocationType
 
-    setting['download.enable'] = setting.download?.enable
-    setting['download.savePath'] = setting.download?.savePath
-    setting['download.fileName'] = setting.download?.fileName
-    setting['download.maxDownloadNum'] = setting.download?.maxDownloadNum
-    setting['download.isDownloadLrc'] = setting.download?.isDownloadLrc
-    setting['download.lrcFormat'] = setting.download?.lrcFormat
-    setting['download.isEmbedPic'] = setting.download?.isEmbedPic
-    setting['download.isEmbedLyric'] = setting.download?.isEmbedLyric
-    setting['download.isUseOtherSource'] = setting.download?.isUseOtherSource
-
-    setting['search.isShowHotSearch'] = setting.search?.isShowHotSearch
-    setting['search.isShowHistorySearch'] = setting.search?.isShowHistorySearch
-    setting['search.isFocusSearchBox'] = setting.search?.isFocusSearchBox
 
     setting['network.proxy.enable'] = setting.network?.proxy?.enable
     setting['network.proxy.host'] = setting.network?.proxy?.host
@@ -128,8 +113,6 @@ export default (setting: any): Partial<LX.AppSetting> => {
     setting['theme.lightId'] = oldThemeMap[setting.theme?.lightId as keyof typeof oldThemeMap]
     setting['theme.darkId'] = oldThemeMap[setting.theme?.darkId as keyof typeof oldThemeMap]
 
-    setting['odc.isAutoClearSearchInput'] = setting.odc?.isAutoClearSearchInput
-    setting['odc.isAutoClearSearchList'] = setting.odc?.isAutoClearSearchList
 
     setting.version = '2.0.0'
   }

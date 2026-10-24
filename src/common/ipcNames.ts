@@ -1,8 +1,6 @@
 const modules = {
   common: {
     get_env_params: 'get_env_params',
-    deeplink: 'deeplink',
-    clear_env_params_deeplink: 'clear_env_params_deeplink',
     system_theme_change: 'system_theme_change',
     theme_change: 'theme_change',
     get_system_fonts: 'get_system_fonts',
@@ -61,14 +59,6 @@ const modules = {
 
     player_status: 'player_status',
     change_tray: 'change_tray',
-    quit_update: 'quit_update',
-    update_check: 'update_check',
-    update_download_update: 'update_download_update',
-    update_available: 'update_available',
-    update_error: 'update_error',
-    update_progress: 'update_progress',
-    update_downloaded: 'update_downloaded',
-    update_not_available: 'update_not_available',
     set_ignore_mouse_events: 'set_ignore_mouse_events',
     set_window_size: 'set_window_size',
 
@@ -88,10 +78,6 @@ const modules = {
     min_toggle: 'min_toggle',
     hide_toggle: 'hide_toggle',
 
-    get_other_source: 'get_other_source',
-    save_other_source: 'save_other_source',
-    clear_other_source: 'clear_other_source',
-    get_other_source_count: 'get_other_source_count',
     get_data: 'get_data',
     save_data: 'save_data',
     get_sound_effect_eq_preset: 'get_sound_effect_eq_preset',
@@ -102,16 +88,6 @@ const modules = {
     // save_sound_effect_pitch_shifter_preset: 'save_sound_effect_pitch_shifter_preset',
     get_hot_key: 'get_hot_key',
 
-    import_user_api: 'import_user_api',
-    remove_user_api: 'remove_user_api',
-    set_user_api: 'set_user_api',
-    get_user_api_list: 'get_user_api_list',
-    request_user_api: 'request_user_api',
-    request_user_api_cancel: 'request_user_api_cancel',
-    get_user_api_status: 'get_user_api_status',
-    user_api_status: 'user_api_status',
-    user_api_show_update_alert: 'user_api_show_update_alert',
-    user_api_set_allow_update_alert: 'user_api_set_allow_update_alert',
 
     get_palyer_lyric: 'get_lyric',
     // save_lyric: 'save_lyric',
@@ -125,12 +101,6 @@ const modules = {
     remove_lyric_edited: 'remove_lyric_edited',
     clear_lyric_edited: 'clear_lyric_edited',
     get_lyric_edited_count: 'get_lyric_edited_count',
-    get_music_url: 'get_music_url',
-    save_music_url: 'save_music_url',
-    clear_music_url: 'clear_music_url',
-    get_music_url_count: 'get_music_url_count',
-
-    open_api_action: 'open_api_action',
     sync_action: 'sync_action',
     sync_get_server_devices: 'sync_get_server_devices',
     sync_remove_server_device: 'sync_remove_server_device',
@@ -144,12 +114,6 @@ const modules = {
     get_themes: 'get_themes',
     save_theme: 'save_theme',
     remove_theme: 'remove_theme',
-
-    download_list_get: 'download_list_get',
-    download_list_add: 'download_list_add',
-    download_list_update: 'download_list_update',
-    download_list_remove: 'download_list_remove',
-    download_list_clear: 'download_list_clear',
   },
   winLyric: {
     close: 'close',

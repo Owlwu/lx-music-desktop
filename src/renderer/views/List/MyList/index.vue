@@ -8,11 +8,6 @@
             <use xlink:href="#icon-list-add" />
           </svg>
         </button>
-        <button :class="$style.listsAdd" :aria-label="$t('list_update_modal__title')" @click="isShowListUpdateModal = true">
-          <svg version="1.1" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" style="transform: rotate(45deg);" height="70%" viewBox="0 0 24 24" space="preserve">
-            <use xlink:href="#icon-refresh" />
-          </svg>
-        </button>
       </div>
     </div>
     <ul ref="dom_lists_list" class="scroll" :class="[$style.listsContent, { [$style.sortable]: isModDown }]">
@@ -74,17 +69,12 @@
     <base-menu v-model="isShowMenu" :menus="menus" :xy="menuLocation" item-name="name" @menu-click="handleMenuClick" />
     <DuplicateMusicModal v-model:visible="isShowDuplicateMusicModal" :list-info="duplicateListInfo" />
     <ListSortModal v-model:visible="isShowListSortModal" :list-info="sortListInfo" />
-    <ListUpdateModal v-model:visible="isShowListUpdateModal" />
   </div>
 </template>
 
 <script>
-import { openUrl } from '@common/utils/electron'
-
-import musicSdk from '@renderer/utils/musicSdk'
 import DuplicateMusicModal from './components/DuplicateMusicModal.vue'
 import ListSortModal from './components/ListSortModal.vue'
-import ListUpdateModal from './components/ListUpdateModal.vue'
 
 import { defaultList, loveList, userLists, fetchingListStatus } from '@renderer/store/list/state'
 import { removeUserList } from '@renderer/store/list/action'
@@ -102,7 +92,6 @@ import { useI18n } from '@renderer/plugins/i18n'
 
 import useShare from './useShare'
 import useMenu from './useMenu'
-import useListUpdate from './useListUpdate'
 import useSort from './useSort'
 import useDarg from './useDarg'
 import useEditList from './useEditList'
@@ -114,7 +103,6 @@ export default {
   components: {
     DuplicateMusicModal,
     ListSortModal,
-    ListUpdateModal,
   },
   props: {
     listId: {
@@ -131,25 +119,10 @@ export default {
     const rightClickItemIndex = ref(-10)
 
     const { handleImportList, handleExportList } = useShare()
-    const { isShowListUpdateModal, handleUpdateSourceList } = useListUpdate()
     const { isShowListSortModal, sortListInfo, handleSortList } = useSort()
     const { isShowDuplicateMusicModal, duplicateListInfo, handleDuplicateList } = useDuplicate()
     const { handleRename, handleSaveListName, isShowNewList, isNewListLeave, handleCreateList } = useEditList({ dom_lists_list })
     useListScroll({ dom_lists_list })
-
-    const handleOpenSourceDetailPage = async(listInfo) => {
-      const { source, sourceListId } = listInfo
-      if (!sourceListId) return
-      let url
-      if (/board__/.test(sourceListId)) {
-        const id = sourceListId.replace(/board__/, '')
-        url = musicSdk[source].leaderboard.getDetailPageUrl(id)
-      } else if (musicSdk[source]?.songList?.getDetailPageUrl) {
-        url = await musicSdk[source].songList.getDetailPageUrl(sourceListId)
-      }
-      if (!url) return
-      void openUrl(url)
-    }
 
     const handleRemove = (listInfo) => {
       void dialog.confirm({
@@ -175,8 +148,6 @@ export default {
 
       handleImportList,
       handleExportList,
-      handleUpdateSourceList,
-      handleOpenSourceDetailPage,
       handleSortList,
       handleDuplicateList,
       handleRename,
@@ -227,7 +198,6 @@ export default {
       userLists,
       fetchingListStatus,
       dom_lists_list,
-      isShowListUpdateModal,
       isShowListSortModal,
       sortListInfo,
       isShowDuplicateMusicModal,

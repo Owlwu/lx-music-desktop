@@ -42,34 +42,6 @@ export default () => {
   })
 
 
-  // =========================歌曲URL=========================
-  mainHandle<string, string>(WIN_MAIN_RENDERER_EVENT_NAME.get_music_url, async({ params: id }) => {
-    return (await global.lx.worker.dbService.getMusicUrl(id)) ?? ''
-  })
-  mainHandle<LX.Music.MusicUrlInfo>(WIN_MAIN_RENDERER_EVENT_NAME.save_music_url, async({ params: { id, url } }) => {
-    await global.lx.worker.dbService.musicUrlSave([{ id, url }])
-  })
-  mainHandle(WIN_MAIN_RENDERER_EVENT_NAME.clear_music_url, async() => {
-    await global.lx.worker.dbService.musicUrlClear()
-  })
-  mainHandle(WIN_MAIN_RENDERER_EVENT_NAME.get_music_url_count, async() => {
-    return global.lx.worker.dbService.musicUrlCount()
-  })
-
-  // =========================换源歌曲=========================
-  mainHandle<string, LX.Music.MusicInfoOnline[]>(WIN_MAIN_RENDERER_EVENT_NAME.get_other_source, async({ params: id }) => {
-    return global.lx.worker.dbService.getMusicInfoOtherSource(id)
-  })
-  mainHandle<LX.Music.MusicInfoOtherSourceSave>(WIN_MAIN_RENDERER_EVENT_NAME.save_other_source, async({ params: { id, list } }) => {
-    await global.lx.worker.dbService.musicInfoOtherSourceAdd(id, list)
-  })
-  mainHandle(WIN_MAIN_RENDERER_EVENT_NAME.clear_other_source, async() => {
-    await global.lx.worker.dbService.musicInfoOtherSourceClear()
-  })
-  mainHandle(WIN_MAIN_RENDERER_EVENT_NAME.get_other_source_count, async() => {
-    return global.lx.worker.dbService.musicInfoOtherSourceCount()
-  })
-
   // mainHandle<string[]>(WIN_MAIN_RENDERER_EVENT_NAME.remove_dislike_music_infos, async({ params: ids }) => {
   //   await global.lx.worker.dbService.dislikeInfoRemove(ids)
   // })

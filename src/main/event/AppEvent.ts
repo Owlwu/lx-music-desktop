@@ -49,10 +49,6 @@ export class Event extends EventEmitter {
     this.emit('theme_change')
   }
 
-  deeplink(link: string) {
-    this.emit('deeplink', link)
-  }
-
   player_status(status: Partial<LX.Player.Status>) {
     for (const [key, value] of Object.entries(status)) {
       // @ts-expect-error

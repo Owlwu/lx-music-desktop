@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import { checkPath, joinPath } from '@common/utils/nodejs'
 import { log } from '@common/utils'
 import { filterMusicList, toNewMusicInfo } from '@common/utils/tools'
-import { APP_EVENT_NAMES, STORE_NAMES } from '@common/constants'
+import { APP_EVENT_NAMES } from '@common/constants'
 
 /**
  * 读取配置文件
@@ -76,17 +76,7 @@ export const migrateDBData = async() => {
 }
 
 // 迁移文件
-const migrateFile = async(name: string, targetName: string) => {
-  let path = joinPath(global.lxDataPath, targetName)
-  let oldPath = joinPath(global.lxOldDataPath, name)
-  if (!await checkPath(path) && await checkPath(oldPath)) {
-    await fs.promises.copyFile(oldPath, path).catch(err => {
-      log.error(err)
-    }).catch(err => {
-      log.error(err)
-    })
-  }
-}
+
 
 /**
  * 迁移 v2.0.0 之前的 data.json
@@ -158,4 +148,4 @@ export const migrateHotKey = async() => {
  * 迁移 v2.0.0 之前的user api
  * @returns
  */
-export const migrateUserApi = async() => migrateFile('userApi.json', STORE_NAMES.USER_API + '.json')
+

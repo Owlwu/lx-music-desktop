@@ -1,13 +1,10 @@
 import { getPlayInfo } from '@renderer/utils/ipc'
-import music from '@renderer/utils/musicSdk'
 import { log } from '@common/utils'
 import { getListMusics, getUserLists, registerAction } from '@renderer/store/list/action'
 
-
-import useInitUserApi from './useInitUserApi'
-import { play, playList } from '@renderer/core/player'
 import { onBeforeUnmount } from '@common/utils/vueTools'
 import { appSetting } from '@renderer/store/setting'
+import { play, playList } from '@renderer/core/player'
 import { playMusicInfo } from '@renderer/store/player/state'
 import { initDislikeInfo, registerRemoteDislikeAction } from '@renderer/core/dislikeList'
 
@@ -30,8 +27,6 @@ const initPrevPlayInfo = async() => {
 }
 
 export default () => {
-  const initUserApi = useInitUserApi()
-
   let unregister: null | (() => void) = null
   let unregisterDislikeEvent: null | (() => void) = null
 
@@ -41,12 +36,6 @@ export default () => {
   })
 
   return async() => {
-    await Promise.all([
-      initUserApi(), // 自定义API
-    ]).catch(err => {
-      log.error(err)
-    })
-    void music.init() // 初始化音乐sdk
     unregister = registerAction((ids) => {
       window.app_event.myListUpdate(ids)
     })

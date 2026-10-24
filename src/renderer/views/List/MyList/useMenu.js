@@ -1,7 +1,6 @@
 import { computed, ref, reactive, nextTick } from '@common/utils/vueTools'
 import { useI18n } from '@renderer/plugins/i18n'
 import { userLists, defaultList, loveList } from '@renderer/store/list/state'
-import musicSdk from '@renderer/utils/musicSdk'
 import { addLocalFile, addLocalFolder } from './actions'
 
 export default ({
@@ -10,10 +9,8 @@ export default ({
   handleRename,
   handleDuplicateList,
   handleSortList,
-  handleOpenSourceDetailPage,
   handleImportList,
   handleExportList,
-  handleUpdateSourceList,
   handleRemove,
 }) => {
   const menuControl = reactive({
@@ -21,10 +18,8 @@ export default ({
     duplicate: true,
     sort: true,
     local_file: true,
-    sourceDetail: true,
     import: true,
     export: true,
-    sync: false,
     remove: true,
   })
   const t = useI18n()
@@ -59,16 +54,6 @@ export default ({
         disabled: !menuControl.local_file,
       },
       {
-        name: t('lists__sync'),
-        action: 'sync',
-        disabled: !menuControl.sync,
-      },
-      {
-        name: t('lists__source_detail'),
-        action: 'sourceDetail',
-        disabled: !menuControl.sourceDetail,
-      },
-      {
         name: t('lists__import'),
         action: 'import',
         disabled: !menuControl.export,
@@ -86,39 +71,18 @@ export default ({
     ]
   })
 
-  const assertSupportDetail = (source, index) => {
-    if (source) {
-      const { sourceListId } = userLists[index]
-      if (sourceListId) {
-        if (/board__/.test(sourceListId)) {
-          // const id = sourceListId.replace(/board__/, '')
-          return !!musicSdk[source]?.leaderboard?.getDetailPageUrl
-        } else {
-          return !!musicSdk[source]?.songList?.getDetailPageUrl
-        }
-      }
-    }
-    return false
-  }
-
   const showMenu = (event, index) => {
-    let source
     switch (index) {
       case -1:
       case -2:
         menuControl.rename = false
         menuControl.remove = false
-        menuControl.sync = false
         break
       default:
         menuControl.rename = true
         menuControl.remove = true
-        source = userLists[index].source
-        menuControl.sync = !!source && !!musicSdk[source]?.songList
         break
     }
-    // menuControl.sort = !!getList(this.getTargetListInfo(index)?.id).length
-    menuControl.sourceDetail = assertSupportDetail(source, index)
 
     menuLocation.x = event.pageX
     menuLocation.y = event.pageY
@@ -152,7 +116,6 @@ export default ({
   }
 
   const menuClick = (action, index) => {
-    // console.log(action)
     hideMenu()
     if (!action) return
     const listInfo = getListInfo(index)
@@ -172,17 +135,11 @@ export default ({
       case 'local_folder':
         addLocalFolder(listInfo)
         break
-      case 'sourceDetail':
-        handleOpenSourceDetailPage(listInfo)
-        break
       case 'import':
         handleImportList(listInfo, index)
         break
       case 'export':
         handleExportList(listInfo)
-        break
-      case 'sync':
-        handleUpdateSourceList(listInfo)
         break
       case 'remove':
         handleRemove(listInfo)

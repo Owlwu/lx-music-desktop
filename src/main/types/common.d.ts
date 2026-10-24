@@ -1,7 +1,7 @@
 import '@common/types/utils'
 import '@common/types/app_setting'
 import '@common/types/common'
-import '@common/types/user_api'
+
 import '@common/types/sync'
 import '@common/types/music_file_sync'
 import '@common/types/list'
@@ -15,4 +15,4 @@ import '@common/types/ipc_main'
 import '@common/types/sound_effect'
 import '@common/types/dislike_list'
 import '@common/types/dislike_list_sync'
-import '@common/types/open_api'
+

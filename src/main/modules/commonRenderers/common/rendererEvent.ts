@@ -1,4 +1,4 @@
-import { mainHandle, mainOn } from '@common/mainIpc'
+import { mainHandle } from '@common/mainIpc'
 import { CMMON_EVENT_NAME } from '@common/ipcNames'
 import { getFonts } from '@main/utils/fontManage'
 
@@ -13,10 +13,6 @@ export default () => {
 
   mainHandle<LX.EnvParams>(CMMON_EVENT_NAME.get_env_params, async() => {
     return global.envParams
-  })
-
-  mainOn(CMMON_EVENT_NAME.clear_env_params_deeplink, () => {
-    global.envParams.deeplink = null
   })
 
   mainHandle<string[]>(CMMON_EVENT_NAME.get_system_fonts, async() => {

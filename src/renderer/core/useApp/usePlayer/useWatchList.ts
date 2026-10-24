@@ -34,15 +34,9 @@ export default () => {
     throttleListChange()
   }
 
-  const handleDownloadListChange = () => {
-    handleListChange(['download'])
-  }
-
   window.app_event.on('myListUpdate', handleListChange)
-  window.app_event.on('downloadListUpdate', handleDownloadListChange)
 
   onBeforeUnmount(() => {
     window.app_event.off('myListUpdate', handleListChange)
-    window.app_event.off('downloadListUpdate', handleDownloadListChange)
   })
 }

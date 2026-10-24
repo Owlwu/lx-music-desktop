@@ -6,7 +6,6 @@ import {
   initSingleInstanceHandle,
   applyElectronEnvParams,
   setUserDataPath,
-  registerDeeplink,
   listenerAppEvent,
 } from './app'
 import { isLinux } from '@common/utils'
@@ -27,7 +26,6 @@ initGlobalData()
 initSingleInstanceHandle()
 applyElectronEnvParams()
 setUserDataPath()
-registerDeeplink(init)
 listenerAppEvent(init)
 
 

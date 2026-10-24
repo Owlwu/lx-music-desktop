@@ -16,12 +16,6 @@ const options = {
   productName: 'lx-music-desktop',
   beforePack,
   afterPack,
-  protocols: {
-    name: 'lx-music-protocol',
-    schemes: [
-      'lxmusic',
-    ],
-  },
   directories: {
     buildResources: './resources',
     output: './build',
@@ -93,8 +87,7 @@ const linuxOptions = {
         'Name[zh_CN]': 'LX Music',
         'Name[zh_TW]': 'LX Music',
         Encoding: 'UTF-8',
-        MimeType: 'x-scheme-handler/lxmusic',
-        StartupNotify: 'false',
+          StartupNotify: 'false',
       },
     },
   },

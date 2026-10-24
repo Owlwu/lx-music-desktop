@@ -1,7 +1,6 @@
 import path from 'node:path'
 import { existsSync, mkdirSync, renameSync } from 'fs'
 import { app, shell, screen, nativeTheme, dialog } from 'electron'
-import { URL_SCHEME_RXP } from '@common/constants'
 import { getProxy, getTheme, initHotKey, initSetting, parseEnvParams } from './utils'
 import { navigationUrlWhiteList } from '@common/config'
 import defaultSetting from '@common/defaultSetting'
@@ -19,7 +18,6 @@ export const initGlobalData = () => {
 
   global.envParams = {
     cmdParams: envParams.cmdParams,
-    deeplink: envParams.deeplink,
   }
   global.lx = {
     inited: false,
@@ -91,11 +89,6 @@ export const initSingleInstanceHandle = () => {
   app.on('second-instance', (event, argv, cwd) => {
     if (isExistMainWindow()) {
       const envParams = parseEnvParams(argv)
-      if (envParams.deeplink) {
-        global.envParams.deeplink = envParams.deeplink
-        global.lx.event_app.deeplink(global.envParams.deeplink)
-        return
-      }
       if (envParams.cmdParams.hidden !== true) {
         showMainWindow()
       }
@@ -141,30 +134,6 @@ export const setUserDataPath = () => {
   global.lxOldDataPath = userDataPath
   global.lxDataPath = path.join(userDataPath, 'LxDatas')
   if (!existsSync(global.lxDataPath)) mkdirSync(global.lxDataPath)
-}
-
-export const registerDeeplink = (startApp: () => void) => {
-  if (process.env.NODE_ENV !== 'production' && process.platform === 'win32') {
-    // Set the path of electron.exe and your app.
-    // These two additional parameters are only available on windows.
-    // console.log(process.execPath, process.argv)
-    app.setAsDefaultProtocolClient('lxmusic', process.execPath, process.argv.slice(1))
-  } else {
-    app.setAsDefaultProtocolClient('lxmusic')
-  }
-
-  // deep link
-  app.on('open-url', (event, url) => {
-    if (!URL_SCHEME_RXP.test(url)) return
-    event.preventDefault()
-    global.envParams.deeplink = url
-    if (isExistMainWindow()) {
-      if (global.envParams.deeplink) global.lx.event_app.deeplink(global.envParams.deeplink)
-      else showMainWindow()
-    } else {
-      startApp()
-    }
-  })
 }
 
 export const listenerAppEvent = (startApp: () => void) => {

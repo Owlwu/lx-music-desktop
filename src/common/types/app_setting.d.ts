@@ -28,15 +28,6 @@ declare global {
        */
       'common.langId': I18n['locale'] | null
 
-      /**
-       * api id
-       */
-      'common.apiSource': string
-
-      /**
-       * 音源名称类型，原名、别名
-       */
-      'common.sourceNameType': 'alias' | 'real'
 
       /**
        * 显示的字体
@@ -73,15 +64,6 @@ declare global {
        */
       'common.transparentWindow': boolean
 
-      /**
-       * 尝试自动更新
-       */
-      'common.tryAutoUpdate': boolean
-
-      /**
-       * 更新版本后是否显示变更日志
-       */
-      'common.showChangeLog': boolean
 
       /**
        * 启动时自动播放歌曲
@@ -93,10 +75,6 @@ declare global {
        */
       'player.togglePlayMethod': 'listLoop' | 'random' | 'list' | 'singleLoop' | 'none'
 
-      /**
-       * 优先播放的音质
-       */
-      'player.playQuality': LX.Quality
 
       /**
        * 是否显示任务栏进度条
@@ -495,90 +473,6 @@ declare global {
        */
       'list.actionButtonsVisible': boolean
 
-      /**
-       * 是否启用下载功能
-       */
-      'download.enable': boolean
-
-      /**
-       * 按列表名分组保存
-       */
-      'download.isSavePathGroupByListName': boolean
-
-      /**
-       * 下载路径
-       */
-      'download.savePath': string
-
-      /**
-       * 文件命名方式
-       */
-      'download.fileName': '歌名 - 歌手' | '歌手 - 歌名' | '歌名'
-
-      /**
-       * 最大并发下载数
-       */
-      'download.maxDownloadNum': number
-
-      /**
-       * 存在同名文件时跳过下载
-       */
-      'download.skipExistFile': boolean
-
-      /**
-       * 是否下载lrc文件
-       */
-      'download.isDownloadLrc': boolean
-
-      /**
-       * 是否在下载 lx 歌词
-       */
-      'download.isDownloadLxLrc': boolean
-
-      /**
-       * 是否下载翻译歌词文件
-       */
-      'download.isDownloadTLrc': boolean
-
-      /**
-       * 是否下载罗马音歌词文件
-       */
-      'download.isDownloadRLrc': boolean
-
-      /**
-       * 保存lrc时的文本编码格式
-       */
-      'download.lrcFormat': 'utf8' | 'gbk'
-
-      /**
-       * 是否在音频文件中嵌入歌曲封面
-       */
-      'download.isEmbedPic': boolean
-
-      /**
-       * 是否在音频文件中嵌入 lx 歌词
-       */
-      'download.isEmbedLyricLx': boolean
-
-      /**
-       * 是否在音频文件中嵌入歌词
-       */
-      'download.isEmbedLyric': boolean
-
-      /**
-       * 是否在音频文件中嵌入翻译歌词
-       */
-      'download.isEmbedLyricT': boolean
-
-      /**
-       * 是否在音频文件中嵌入罗马音歌词
-       */
-      'download.isEmbedLyricR': boolean
-
-      /**
-       * 歌曲源不可用时，是否启用换源下载
-       */
-      'download.isUseOtherSource': boolean
 
       /**
        * 主题id
@@ -595,20 +489,6 @@ declare global {
        */
       'theme.darkId': string
 
-      /**
-       * 是否显示热门搜索
-       */
-      'search.isShowHotSearch': boolean
-
-      /**
-       * 是否显示搜索历史
-       */
-      'search.isShowHistorySearch': boolean
-
-      /**
-       * 软件启动时是否自动聚焦搜索框
-       */
-      'search.isFocusSearchBox': boolean
 
       /**
        * 是否启用代理
@@ -676,30 +556,6 @@ declare global {
       'sync.musicFile.scope': string[]
 
 
-      /**
-       * 是否启用开放API服务
-       */
-      'openAPI.enable': boolean
-
-      /**
-       * API服务端口号
-       */
-      'openAPI.port': '23330' | string
-
-      /**
-       * 是否绑定到局域网
-       */
-      'openAPI.bindLan': boolean
-
-      /**
-       * 是否在离开搜索界面时自动清空搜索框
-       */
-      'odc.isAutoClearSearchInput': boolean
-
-      /**
-       * 是否在离开搜索界面时自动清空搜索结果列表
-       */
-      'odc.isAutoClearSearchList': boolean
     }
   }
 

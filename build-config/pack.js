@@ -8,7 +8,6 @@ const Spinnies = require('spinnies')
 const mainConfig = './main/webpack.config.prod'
 const rendererConfig = './renderer/webpack.config.prod'
 const rendererLyricConfig = './renderer-lyric/webpack.config.prod'
-const rendererScriptConfig = './renderer-scripts/webpack.config.prod'
 
 const errorLog = chalk.bgRed.white(' ERROR ') + ' '
 const okayLog = chalk.bgGreen.white(' OKAY ') + ' '
@@ -24,7 +23,6 @@ function build() {
   spinners.add('main', { text: 'main building' })
   spinners.add('renderer', { text: 'renderer building' })
   spinners.add('renderer-lyric', { text: 'renderer-lyric building' })
-  spinners.add('renderer-scripts', { text: 'renderer-scripts building' })
   let results = ''
 
   // m.on('success', () => {
@@ -66,15 +64,6 @@ function build() {
     }).catch(err => {
       spinners.fail('renderer-lyric', { text: 'renderer-lyric build fail :(' })
       console.log(`\n  ${errorLog}failed to build renderer-lyric process`)
-      console.error(`\n${err}\n`)
-      process.exit(1)
-    }),
-    pack(rendererScriptConfig).then(result => {
-      results += result + '\n\n'
-      spinners.succeed('renderer-scripts', { text: 'renderer-scripts build success!' })
-    }).catch(err => {
-      spinners.fail('renderer-scripts', { text: 'renderer-scripts build fail :(' })
-      console.log(`\n  ${errorLog}failed to build renderer-scripts process`)
       console.error(`\n${err}\n`)
       process.exit(1)
     }),

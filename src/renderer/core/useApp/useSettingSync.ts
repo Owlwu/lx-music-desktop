@@ -3,7 +3,6 @@ import { isFullscreen, proxy, sync, windowSizeList } from '@renderer/store'
 import { appSetting } from '@renderer/store/setting'
 import { sendSyncAction, setWindowSize } from '@renderer/utils/ipc'
 import { setLanguage } from '@root/lang'
-import { setUserApi } from '../apiSource'
 // import { applyTheme, getThemes } from '@renderer/store/utils'
 
 
@@ -21,10 +20,6 @@ export default () => {
     if (!id) return
     setLanguage(id)
     window.setLang(id)
-  })
-
-  watch(() => appSetting['common.apiSource'], apiSource => {
-    void setUserApi(apiSource)
   })
 
   watch(() => appSetting['common.font'], (val) => {

@@ -1,11 +1,8 @@
-import { useRouter } from '@common/utils/vueRouter'
-import musicSdk from '@renderer/utils/musicSdk'
-import { openUrl, clipboardWriteText } from '@common/utils/electron'
+import { clipboardWriteText } from '@common/utils/electron'
 import { dialog } from '@renderer/plugins/Dialog'
 import { useI18n } from '@renderer/plugins/i18n'
 import { removeListMusics } from '@renderer/store/list/action'
-import { appSetting } from '@renderer/store/setting'
-import { formatMusicName, toOldMusicInfo } from '@renderer/utils/index'
+import { formatMusicName } from '@renderer/utils/index'
 import { addDislikeInfo, hasDislike } from '@renderer/core/dislikeList'
 import { playNext } from '@renderer/core/player'
 import { playMusicInfo } from '@renderer/store/player/state'
@@ -14,29 +11,11 @@ import { checkPath } from '@common/utils/nodejs'
 
 
 export default ({ props, list, selectedList, removeAllSelect }) => {
-  const router = useRouter()
   const t = useI18n()
-
-  const handleSearch = index => {
-    const info = list.value[index]
-    router.push({
-      path: '/search',
-      query: {
-        text: `${info.name} ${info.singer}`,
-      },
-    })
-  }
-
-  const handleOpenMusicDetail = index => {
-    const minfo = list.value[index]
-    const url = musicSdk[minfo.source]?.getMusicDetailPageUrl(toOldMusicInfo(minfo))
-    if (!url) return
-    openUrl(url)
-  }
 
   const handleCopyName = index => {
     const minfo = list.value[index]
-    clipboardWriteText(formatMusicName(appSetting['download.fileName'], minfo.name, minfo.singer))
+    clipboardWriteText(formatMusicName('歌名 - 歌手', minfo.name, minfo.singer))
   }
 
   const handleOpenFolder = async(index) => {
@@ -79,8 +58,6 @@ export default ({ props, list, selectedList, removeAllSelect }) => {
   }
 
   return {
-    handleSearch,
-    handleOpenMusicDetail,
     handleCopyName,
     handleOpenFolder,
     handleDislikeMusic,

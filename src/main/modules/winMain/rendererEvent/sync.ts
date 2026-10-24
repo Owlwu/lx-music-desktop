@@ -45,7 +45,7 @@ export default () => {
       case 'musicFile_apply': return musicFileApply(data.data)
       case 'musicFile_cancel':
         musicFileCancel()
-        return
+
       default:
         break
     }

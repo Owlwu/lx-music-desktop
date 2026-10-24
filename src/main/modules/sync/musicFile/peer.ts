@@ -25,6 +25,7 @@ interface ReadyClientSocket {
  * 这里只在真正需要时才 require，保证模块图先完成初始化。
  */
 const getReadyClientSockets = (): ReadyClientSocket[] => {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/consistent-type-imports
   const server = require('../server/server') as typeof import('../server/server')
   return server.getReadyClientSockets() as unknown as ReadyClientSocket[]
 }

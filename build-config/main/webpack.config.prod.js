@@ -25,10 +25,6 @@ module.exports = merge(baseConfig, {
     new CopyWebpackPlugin({
       patterns: [
         {
-          from: path.join(__dirname, '../../src/main/modules/userApi/renderer/user-api.html'),
-          to: path.join(__dirname, '../../dist/userApi/renderer/user-api.html'),
-        },
-        {
           from: path.join(__dirname, '../../src/common/theme/images/*').replace(/\\/g, '/'),
           to: path.join(__dirname, '../../dist/theme_images/[name][ext]'),
         },

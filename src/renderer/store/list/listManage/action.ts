@@ -6,7 +6,7 @@ import {
   tempList,
   userLists,
 } from './state'
-import { overwriteListPosition, overwriteListUpdateInfo, removeListPosition, removeListUpdateInfo } from '@renderer/utils/data'
+import { overwriteListPosition, removeListPosition } from '@renderer/utils/data'
 import { LIST_IDS } from '@common/constants'
 import { arrPush, arrUnshift } from '@common/utils/common'
 
@@ -139,7 +139,6 @@ export const listDataOverwrite = ({ defaultList, loveList, userList, tempList }:
   const newIds = [LIST_IDS.DEFAULT, LIST_IDS.LOVE, ...userList.map(l => l.id)]
   if (tempList) newIds.push(LIST_IDS.TEMP)
   void overwriteListPosition(newIds)
-  void overwriteListUpdateInfo(newIds)
   return updatedListIds
 }
 
@@ -167,7 +166,6 @@ export const userListsRemove = (ids: string[]) => {
   for (const id of ids) {
     removeUserList(id)
     void removeListPosition(id)
-    void removeListUpdateInfo(id)
     if (!allMusicList.has(id)) continue
     removeMusicList(id)
     changedIds.push(id)

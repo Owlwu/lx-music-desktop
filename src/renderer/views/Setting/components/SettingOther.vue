@@ -27,17 +27,8 @@ dd
   h3#other_other_source {{ $t('setting__other_other_cache') }}
   div
     .p
-      | {{ $t('setting__other_other_source_label') }}
-      span.auto-hidden {{ otherSourceCount }}
-    .p
-      | {{ $t('setting__other_music_url_label') }}
-      span.auto-hidden {{ musicUrlCount }}
-    .p
       | {{ $t('setting__other_lyric_raw_label') }}
       span.auto-hidden {{ lyricRawCount }}
-    .p
-      base-btn.btn(min :disabled="isDisabledOtherSourceCacheClear" @click="handleClearOtherSourceCache") {{ $t('setting__other_other_source_clear_btn') }}
-      base-btn.btn(min :disabled="isDisabledMusicUrlCacheClear" @click="handleClearMusicUrlCache") {{ $t('setting__other_music_url_clear_btn') }}
       base-btn.btn(min :disabled="isDisabledLyricRawCacheClear" @click="handleClearLyricRawCache") {{ $t('setting__other_lyric_raw_clear_btn') }}
 
 dd
@@ -71,8 +62,6 @@ dd
 import { ref, computed } from '@common/utils/vueTools'
 import {
   clearCache, getCacheSize,
-  getOtherSourceCount, clearOtherSource,
-  getMusicUrlCount, clearMusicUrl,
   getLyricRawCount, clearLyricRaw,
   getLyricEditedCount, clearLyricEdited,
 } from '@renderer/utils/ipc'
@@ -124,39 +113,6 @@ export default {
     }
     refreshCacheSize()
 
-
-    const otherSourceCount = ref(0)
-    const isDisabledOtherSourceCacheClear = ref(false)
-    const refreshOtherSourceCount = () => {
-      void getOtherSourceCount().then(count => {
-        otherSourceCount.value = count
-      })
-    }
-    const handleClearOtherSourceCache = async() => {
-      isDisabledOtherSourceCacheClear.value = true
-      void clearOtherSource().then(() => {
-        refreshOtherSourceCount()
-        isDisabledOtherSourceCacheClear.value = false
-      })
-    }
-    refreshOtherSourceCount()
-
-
-    const musicUrlCount = ref(0)
-    const isDisabledMusicUrlCacheClear = ref(false)
-    const refreshMusicUrlCount = () => {
-      void getMusicUrlCount().then(count => {
-        musicUrlCount.value = count
-      })
-    }
-    const handleClearMusicUrlCache = async() => {
-      isDisabledMusicUrlCacheClear.value = true
-      void clearMusicUrl().then(() => {
-        refreshMusicUrlCount()
-        isDisabledMusicUrlCacheClear.value = false
-      })
-    }
-    refreshMusicUrlCount()
 
     const isShowDislikeList = ref(false)
 
@@ -220,13 +176,6 @@ export default {
       isDisabledResourceCacheClear,
       clearResourceCache,
 
-      otherSourceCount,
-      isDisabledOtherSourceCacheClear,
-      handleClearOtherSourceCache,
-
-      musicUrlCount,
-      isDisabledMusicUrlCacheClear,
-      handleClearMusicUrlCache,
 
       dislikeRuleCount,
       isShowDislikeList,

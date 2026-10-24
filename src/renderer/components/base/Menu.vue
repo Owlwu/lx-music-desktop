@@ -3,7 +3,7 @@
     <ul ref="dom_menu" :class="$style.list" :style="menuStyles" role="toolbar" :aria-hidden="!modelValue">
       <li
         v-for="item in menus"
-        v-show="!item.hide && (item.action == 'download' ? appSetting['download.enable'] : true)"
+        v-show="!item.hide"
         :key="item.action"
         :class="$style.listItem"
         role="tab"

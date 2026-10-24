@@ -1,5 +1,3 @@
-import path from 'node:path'
-import os from 'node:os'
 
 const isMac = process.platform == 'darwin'
 const isWin = process.platform == 'win32'
@@ -11,8 +9,6 @@ const defaultSetting: LX.AppSetting = {
   'common.fontSize': 16,
   'common.startInFullscreen': false,
   'common.langId': null,
-  'common.apiSource': 'temp',
-  'common.sourceNameType': 'alias',
   'common.font': '',
   'common.isShowAnimation': true,
   'common.randomAnimate': true,
@@ -20,12 +16,9 @@ const defaultSetting: LX.AppSetting = {
   'common.controlBtnPosition': isMac ? 'left' : 'right',
   'common.playBarProgressStyle': 'mini',
   'common.transparentWindow': !isMac,
-  'common.tryAutoUpdate': true,
-  'common.showChangeLog': true,
 
   'player.startupAutoPlay': false,
   'player.togglePlayMethod': 'listLoop',
-  'player.playQuality': '128k',
   'player.isShowTaskProgess': true,
   'player.isShowStatusBarLyric': false,
   'player.volume': 1,
@@ -109,28 +102,6 @@ const defaultSetting: LX.AppSetting = {
   'list.addMusicLocationType': 'top',
   'list.actionButtonsVisible': false,
 
-  'download.enable': false,
-  'download.isSavePathGroupByListName': false,
-  'download.savePath': path.join(os.homedir(), 'Desktop'),
-  'download.fileName': '歌名 - 歌手',
-  'download.maxDownloadNum': 3,
-  'download.skipExistFile': true,
-  'download.isDownloadLrc': false,
-  'download.isDownloadLxLrc': true,
-  'download.isDownloadTLrc': false,
-  'download.isDownloadRLrc': false,
-  'download.lrcFormat': 'utf8',
-  'download.isEmbedPic': true,
-  'download.isEmbedLyric': false,
-  'download.isEmbedLyricLx': true,
-  'download.isEmbedLyricT': false,
-  'download.isEmbedLyricR': false,
-  'download.isUseOtherSource': false,
-
-  'search.isShowHotSearch': false,
-  'search.isShowHistorySearch': false,
-  'search.isFocusSearchBox': false,
-
   'network.proxy.enable': false,
   'network.proxy.host': '',
   'network.proxy.port': '',
@@ -147,18 +118,10 @@ const defaultSetting: LX.AppSetting = {
   'sync.musicFile.root': '',
   'sync.musicFile.scope': [],
 
-  'openAPI.enable': false,
-  'openAPI.port': '23330',
-  'openAPI.bindLan': false,
-
   // 'theme.id': 'blue_plus',
   'theme.id': 'green',
   'theme.lightId': 'green',
   'theme.darkId': 'black',
-
-  'odc.isAutoClearSearchInput': false,
-  'odc.isAutoClearSearchList': false,
-
 }
 
 

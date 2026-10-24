@@ -5,7 +5,7 @@ import { appSetting } from '@renderer/store/setting'
 import { dislikeInfo } from '@renderer/store/dislikeList'
 import { setPowerSaveBlocker as setPowerSaveBlockerRemote } from '@renderer/utils/ipc'
 
-// export const getPlayType = (highQuality: boolean, musicInfo: LX.Music.MusicInfo | LX.Download.ListItem): LX.Quality | null => {
+// export const getPlayType = (highQuality: boolean, musicInfo: LX.Music.MusicInfo): LX.Quality | null => {
 //   if ('progress' in musicInfo || musicInfo.source == 'local') return null
 //   let type: LX.Quality = '128k'
 //   let list = qualityList.value[musicInfo.source]
@@ -19,8 +19,8 @@ import { setPowerSaveBlocker as setPowerSaveBlockerRemote } from '@renderer/util
 export const filterList = async({ playedList, listId, list, playerMusicInfo, isNext }: {
   playedList: LX.Player.PlayMusicInfo[]
   listId: string
-  list: Array<LX.Music.MusicInfo | LX.Download.ListItem>
-  playerMusicInfo?: LX.Music.MusicInfo | LX.Download.ListItem
+  list: LX.Music.MusicInfo[]
+  playerMusicInfo?: LX.Music.MusicInfo
   isNext: boolean
 }) => {
   // if (this.list.listName === null) return

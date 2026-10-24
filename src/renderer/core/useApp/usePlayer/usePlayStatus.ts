@@ -100,12 +100,12 @@ export default () => {
         break
       case 'collect':
         if (!playMusicInfo.musicInfo) return
-        void addListMusics(loveList.id, ['progress' in playMusicInfo.musicInfo ? playMusicInfo.musicInfo.metadata.musicInfo : playMusicInfo.musicInfo])
+        void addListMusics(loveList.id, [playMusicInfo.musicInfo])
         if (await updateCollectStatus()) sendPlayerStatus({ collect })
         break
       case 'unCollect':
         if (!playMusicInfo.musicInfo) return
-        void removeListMusics({ listId: loveList.id, ids: ['progress' in playMusicInfo.musicInfo ? playMusicInfo.musicInfo.metadata.musicInfo.id : playMusicInfo.musicInfo.id] })
+        void removeListMusics({ listId: loveList.id, ids: [playMusicInfo.musicInfo.id] })
         if (await updateCollectStatus()) sendPlayerStatus({ collect })
         break
       case 'seek': {

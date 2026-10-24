@@ -5,7 +5,7 @@ declare namespace LX {
       /**
        * 当前播放歌曲的列表 id
        */
-      musicInfo: LX.Download.ListItem | LX.Music.MusicInfo
+      musicInfo: LX.Music.MusicInfo
       /**
         * 当前播放歌曲的列表 id
         */
@@ -39,7 +39,7 @@ declare namespace LX {
       /**
        * 歌曲信息
        */
-      musicInfo: LX.Music.MusicInfo | LX.Download.ListItem
+      musicInfo: LX.Music.MusicInfo
       /**
        * 是否添加到列表顶部
        */
