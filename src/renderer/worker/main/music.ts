@@ -15,7 +15,15 @@ const getTempDir = async() => {
 export const getMusicFilePic = async(filePath: string) => {
   const picture = await getLocalMusicFilePic(filePath)
   if (!picture) return ''
-  if (typeof picture == 'string') return picture
+  if (typeof picture == 'string') {
+    // 同名图片：带 mtime 查询串击穿 Chromium 图片缓存（覆盖封面后立即生效）
+    try {
+      const stats = await fs.stat(picture)
+      return `${picture}?v=${stats.mtimeMs}`
+    } catch {
+      return picture
+    }
+  }
   if (picture.data.length > 400_000) {
     try {
       const tempDir = await getTempDir()

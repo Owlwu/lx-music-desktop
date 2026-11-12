@@ -39,11 +39,37 @@ declare namespace LX {
        * 仅 provider 内部缓存用，不跨 IPC 传递
        */
       lyric?: string
+      /**
+       * 源内可用于取逐字数据的 id（QQ 为数字 songid）；无逐字能力的源为空
+       */
+      trackId?: string
+      /**
+       * 逐字可用性；null/undefined = 尚未探测，false = 已探测为仅行级
+       */
+      hasWordSync?: boolean | null
     }
 
     interface LyricResult {
       lyric: string
       isSynced: boolean
+    }
+
+    /**
+     * 逐字数据（QQ QRC 转换结果）
+     */
+    interface WordSyncResult {
+      /**
+       * 与 lxlyric 同源的行级歌词（3 位毫秒时间标签），用于写入正文与 `lrc:` 段
+       */
+      lyric: string
+      /**
+       * LX 逐字格式：`[mm:ss.xxx]<相对行首毫秒,时长毫秒>字...`
+       */
+      lxlyric: string
+    }
+
+    interface GetWordSyncParams {
+      candidate: LyricsCandidate
     }
 
     interface LyricsProvider {
@@ -76,6 +102,10 @@ declare namespace LX {
     interface ApplyResult {
       lrcPath: string
       backupCreated: boolean
+      /**
+       * 本次是否写入了逐字数据（`[awlrc:]`）
+       */
+      hasWordSync: boolean
     }
 
     interface FilePathParams {

@@ -136,9 +136,16 @@ const modules = {
   media_match: {
     search: 'search',
     get_lyric: 'get_lyric',
+    get_word_sync: 'get_word_sync',
     apply_lrc: 'apply_lrc',
     rollback_lrc: 'rollback_lrc',
     get_lrc_state: 'get_lrc_state',
+  },
+  cover_match: {
+    search: 'search',
+    apply: 'apply',
+    get_state: 'get_state',
+    rollback: 'rollback',
   },
 }
 
@@ -165,3 +172,4 @@ export const WIN_MAIN_RENDERER_EVENT_NAME = modules.winMain
 export const WIN_LYRIC_RENDERER_EVENT_NAME = modules.winLyric
 export const HOTKEY_RENDERER_EVENT_NAME = modules.hotKey
 export const MEDIA_MATCH_EVENT_NAME = modules.media_match
+export const COVER_MATCH_EVENT_NAME = modules.cover_match

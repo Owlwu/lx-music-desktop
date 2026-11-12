@@ -262,6 +262,7 @@ const qqSearchText = {
       list: [
         {
           songmid: '001p3V4c0PQdmd',
+          songid: 203636496,
           songname: '打上花火',
           singer: [{ name: 'Daoko' }, { name: '米津玄師' }],
           albumname: '打上花火 (通常盤)',
@@ -279,6 +280,7 @@ const qqItems = qqParse.parseQqSearchResponse(qqSearchText)
 check('QQ 搜索结果条数', qqItems.length, 1)
 check('QQ 结果字段映射', qqItems[0], {
   id: '001p3V4c0PQdmd',
+  songId: '203636496',
   name: '打上花火',
   singer: 'Daoko / 米津玄師',
   albumName: '打上花火 (通常盤)',

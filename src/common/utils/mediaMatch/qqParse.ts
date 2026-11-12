@@ -3,6 +3,10 @@ import { validateLyric } from './lrcText'
 
 export interface QqSearchItem {
   id: string
+  /**
+   * QQ 数字 songid：QRC 逐字接口的 songID 参数
+   */
+  songId: string
   name: string
   singer: string
   albumName: string
@@ -28,6 +32,15 @@ const isRecord = (value: unknown): value is Record<string, unknown> => {
 }
 
 const asString = (value: unknown): string => typeof value === 'string' ? value : ''
+
+/**
+ * 数字 id（QQ 的 songid 是 number）统一转成字符串，空值返回 ''
+ */
+const asIdString = (value: unknown): string => {
+  if (typeof value === 'string') return value.trim()
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value)
+  return ''
+}
 
 const toNumber = (value: unknown): number | null => {
   const num = Number(value)
@@ -71,6 +84,7 @@ export const parseQqSearchResponse = (json: unknown): QqSearchItem[] => {
     const interval = toNumber(raw.interval)
     items.push({
       id,
+      songId: asIdString(raw.songid),
       name,
       singer: singers.join(' / '),
       albumName: asString(raw.albumname),
@@ -140,4 +154,50 @@ export const parseQqLyricResponse = (json: unknown): QqLyricParseResult => {
     isSynced: validation.isSynced,
     placeholder: false,
   }
+}
+
+export interface QqWordSyncResponse {
+  /**
+   * 外层业务码（伪造 songID 时外层仍为 0，必须再看 reqCode）
+   */
+  code: number
+  /**
+   * req.code；结构缺失时为 null
+   */
+  reqCode: number | null
+  /**
+   * req.data.qrc 是否为 1（1 = 逐字数据）
+   */
+  qrc: boolean
+  /**
+   * 逐字 hex 密文；不可用/为空时为 null
+   */
+  lyric: string | null
+}
+
+/**
+ * 解析 musicu.fcg GetPlayLyricInfo 响应（外层 code + req.code 两级判定）。
+ */
+export const parseQqWordSyncResponse = (json: unknown): QqWordSyncResponse => {
+  if (!isRecord(json)) return { code: -1, reqCode: null, qrc: false, lyric: null }
+  const code = toNumber(json.code) ?? -1
+  const req = isRecord(json.req) ? json.req : null
+  const reqCode = req == null ? null : toNumber(req.code)
+  if (code !== 0 || reqCode !== 0) return { code, reqCode, qrc: false, lyric: null }
+
+  const data = req != null && isRecord(req.data) ? req.data : null
+  const qrc = toNumber(data?.qrc) === 1
+  const lyric = asString(data?.lyric).trim()
+  if (!qrc || !lyric) return { code, reqCode, qrc, lyric: null }
+  return { code, reqCode, qrc, lyric }
+}
+
+/**
+ * 解出 QRC 明文：XML 包裹时取 `LyricContent` 属性并反转义实体，否则按纯文本处理。
+ */
+export const extractQrcLyricText = (decoded: string): string => {
+  if (!decoded) return ''
+  const match = /LyricContent="([\s\S]*?)"\s*\/?>/.exec(decoded)
+  if (!match) return decoded.replace(/\r\n?/g, '\n').trim()
+  return htmlUnescape(match[1]).replace(/\r\n?/g, '\n').trim()
 }

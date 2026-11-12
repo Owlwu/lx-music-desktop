@@ -21,6 +21,7 @@ material-modal(:show="show" max-width="78%" min-width="560px" @close="handleClos
             div(:class="$style.candidateHead")
               span(:class="$style.candidateName") {{ item.name }}
               span(:class="$style.sourceTag") {{ $t('lyrics_match__source_' + item.source) }}
+              span(v-if="wordSyncTag(item)" :class="[$style.tag, $style.tagWordSync]") {{ wordSyncTag(item) }}
               span(v-if="item.instrumental" :class="[$style.tag, $style.tagWarn]") {{ $t('lyrics_match__instrumental_suspect') }}
               span(v-else-if="item.hasSynced === false" :class="$style.tag") {{ $t('lyrics_match__plain') }}
               span(v-else-if="item.hasSynced === null" :class="$style.tag") {{ $t('lyrics_match__sync_unknown') }}
@@ -46,7 +47,7 @@ material-modal(:show="show" max-width="78%" min-width="560px" @close="handleClos
 
 <script>
 import { dialog } from '@renderer/plugins/Dialog'
-import { mediaMatchApplyLrc, mediaMatchGetLyric, mediaMatchSearch } from '@renderer/utils/ipc'
+import { mediaMatchApplyLrc, mediaMatchGetLyric, mediaMatchGetWordSync, mediaMatchSearch } from '@renderer/utils/ipc'
 import { getMediaMatchErrorCode, getMediaMatchErrorKey } from '@renderer/utils/mediaMatch'
 import { hasInstrumentalMark } from '@common/utils/mediaMatch/normalize'
 
@@ -81,6 +82,10 @@ export default {
       applying: false,
       requestId: 0,
       previewRequestId: 0,
+      // 当前预览候选的逐字数据（QQ QRC）；null = 无逐字/未探测
+      wordSync: null,
+      // 候选行状态：`source:id` -> 'checking' | 'available' | 'line_only'
+      wordSyncStatus: {},
     }
   },
   computed: {
@@ -114,6 +119,7 @@ export default {
       if (!candidate) return ''
       if (this.queryInstrumental) return window.i18n.t('lyrics_match__instrumental_query_tip')
       if (candidate.instrumental) return window.i18n.t('lyrics_match__instrumental_tip')
+      if (this.wordSync) return window.i18n.t('lyrics_match__word_sync_tip')
       if (candidate.hasSynced === false || !this.preview.isSynced) return window.i18n.t('lyrics_match__plain_tip')
       return window.i18n.t('lyrics_match__synced_tip')
     },
@@ -134,6 +140,8 @@ export default {
       this.noticeText = ''
       this.applying = false
       this.previewRequestId++
+      this.wordSync = null
+      this.wordSyncStatus = {}
       void this.handleSearch()
     },
   },
@@ -164,6 +172,9 @@ export default {
         hasSynced: candidate.hasSynced,
         instrumental: candidate.instrumental,
         score: candidate.score,
+        // QRC 逐字需要数字 songid；缺少时主进程会直接返回 null
+        trackId: candidate.trackId,
+        hasWordSync: candidate.hasWordSync,
       }
     },
     toPlainMusicInfo() {
@@ -203,6 +214,8 @@ export default {
       this.previewError = ''
       this.noticeText = ''
       this.previewRequestId++
+      this.wordSync = null
+      this.wordSyncStatus = {}
 
       const keyword = this.keyword.trim()
       const defaultKeyword = this.buildDefaultKeyword()
@@ -235,6 +248,48 @@ export default {
         return null
       }
     },
+    /**
+     * 候选行上的逐字状态标签：LRCLIB 恒为仅行级；QQ 按探测结果展示
+     */
+    wordSyncTag(item) {
+      if (!item) return ''
+      if (item.source !== 'qq') return window.i18n.t('lyrics_match__word_sync_line_only')
+      const status = this.wordSyncStatus[item.source + ':' + item.id]
+      if (status === 'checking') return window.i18n.t('lyrics_match__word_sync_checking')
+      if (status === 'available') return window.i18n.t('lyrics_match__word_sync_available')
+      if (status === 'line_only') return window.i18n.t('lyrics_match__word_sync_line_only')
+      return ''
+    },
+    /**
+     * 选中候选后并行探测 QQ QRC；失败静默返回 null（降级行级），状态只写候选行标签
+     */
+    async fetchCandidateWordSync(index) {
+      const candidate = this.candidates[index]
+      if (!candidate || candidate.source !== 'qq') return null
+      const key = candidate.source + ':' + candidate.id
+      // 状态按候选 id 记录，探测结果即使已过期也只影响该行的标签，不影响当前预览
+      const setStatus = status => {
+        this.wordSyncStatus = { ...this.wordSyncStatus, [key]: status }
+      }
+      if (!candidate.trackId) {
+        setStatus('line_only')
+        return null
+      }
+      setStatus('checking')
+      try {
+        const result = await mediaMatchGetWordSync({ candidate: this.toPlainCandidate(candidate) })
+        if (!result?.lxlyric) {
+          setStatus('line_only')
+          return null
+        }
+        setStatus('available')
+        return result
+      } catch (err) {
+        console.log(err)
+        setStatus('line_only')
+        return null
+      }
+    },
     async handleSelect(index) {
       const candidate = this.candidates[index]
       if (!candidate) return
@@ -242,12 +297,27 @@ export default {
       this.preview = { lyric: '', isSynced: false }
       this.previewError = ''
       this.noticeText = ''
+      this.wordSync = null
       this.previewLoading = true
       const token = ++this.previewRequestId
       let targetIndex = index
+      // 行级与逐字并行请求；逐字结果只在预览落定时使用，保证「预览 = 应用后正文」
+      let wordSyncPromise = this.fetchCandidateWordSync(index)
       try {
         let result = await this.fetchCandidateLyric(index)
         if (token != this.previewRequestId) return
+
+        // QQ 的行级接口失败但 QRC 可能可用：先等并行中的逐字结果，避免误换候选
+        if (!result) {
+          const earlyWordSync = await wordSyncPromise
+          if (token != this.previewRequestId) return
+          if (earlyWordSync) {
+            this.selectedIndex = index
+            this.wordSync = earlyWordSync
+            this.preview = { lyric: earlyWordSync.lyric, isSynced: true }
+            return
+          }
+        }
 
         // 当前候选可能无歌词（QQ -1901 / 纯音乐 / 占位文本）：
         // 沿排序再试最多 4 个候选（跨源），避免自动选中第一条时预览一直为空。
@@ -261,6 +331,7 @@ export default {
             result = await this.fetchCandidateLyric(nextIndex)
             if (result) {
               targetIndex = nextIndex
+              wordSyncPromise = this.fetchCandidateWordSync(nextIndex)
               this.noticeText = window.i18n.t('lyrics_match__qq_next_candidate', { name: nextCandidate.name })
               break
             }
@@ -268,7 +339,14 @@ export default {
         }
 
         if (token != this.previewRequestId) return
-        if (result) {
+        const wordSync = await wordSyncPromise
+        if (token != this.previewRequestId) return
+        if (wordSync) {
+          // 有逐字时预览用逐字结果的正文（与主进程 apply_lrc 写入的正文一致）
+          this.selectedIndex = targetIndex
+          this.wordSync = wordSync
+          this.preview = { lyric: wordSync.lyric, isSynced: true }
+        } else if (result) {
           this.selectedIndex = targetIndex
           this.preview = result
         } else {
@@ -436,6 +514,11 @@ export default {
 
 .tagWarn {
   color: var(--color-primary-dark-200);
+}
+
+.tagWordSync {
+  color: var(--color-primary);
+  border-color: var(--color-primary-alpha-500);
 }
 
 .candidateMeta {

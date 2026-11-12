@@ -14,6 +14,7 @@ export default ({
   handleCopyName,
   handleOpenFolder,
   handleMatchLyrics,
+  handleMatchCover,
   handleDislikeMusic,
   handleRemoveMusic,
 }) => {
@@ -21,6 +22,7 @@ export default ({
     play: true,
     playLater: true,
     matchLyrics: true,
+    matchCover: true,
     copyName: true,
     openFolder: true,
     addTo: true,
@@ -49,6 +51,11 @@ export default ({
         name: t('list__match_lyrics'),
         action: 'matchLyrics',
         disabled: !itemMenuControl.matchLyrics,
+      },
+      {
+        name: t('list__match_cover'),
+        action: 'matchCover',
+        disabled: !itemMenuControl.matchCover,
       },
       {
         name: t('list__add_to'),
@@ -90,9 +97,11 @@ export default ({
 
   const showMenu = async(event, musicInfo) => {
     itemMenuControl.dislike = !hasDislike(musicInfo)
-    itemMenuControl.matchLyrics = musicInfo.source === 'local' &&
+    const fileExists = musicInfo.source === 'local' &&
       !!musicInfo.meta?.filePath &&
       await checkPath(musicInfo.meta.filePath)
+    itemMenuControl.matchLyrics = fileExists
+    itemMenuControl.matchCover = fileExists
 
     menuLocation.x = event.pageX
     menuLocation.y = event.pageY
@@ -121,6 +130,9 @@ export default ({
         break
       case 'matchLyrics':
         handleMatchLyrics(index)
+        break
+      case 'matchCover':
+        handleMatchCover(index)
         break
       case 'copyName':
         handleCopyName(index)

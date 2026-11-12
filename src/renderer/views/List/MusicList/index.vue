@@ -97,6 +97,7 @@
     <search-list :list="list" :visible="isShowSearchBar" @action="handleMusicSearchAction" />
     <music-sort-modal v-model:show="isShowMusicSortModal" :music-info="selectedSortMusicInfo" :selected-num="selectedNum" @confirm="sortMusic" />
     <common-lyrics-match-modal v-model:show="isShowLyricsMatch" :music-info="matchMusicInfo" @applied="handleLyricsMatchApplied" />
+    <common-cover-match-modal v-model:show="isShowCoverMatch" :music-info="matchCoverMusicInfo" @applied="handleCoverMatchApplied" @restored="handleCoverMatchRestored" />
     <base-menu v-model="isShowItemMenu" :menus="menus" :xy="menuLocation" item-name="name" @menu-click="handleMenuClick" />
   </div>
 </template>
@@ -113,6 +114,7 @@ import useMusicAdd from './useMusicAdd'
 import useSort from './useSort'
 import useMusicActions from './useMusicActions'
 import useLyricsMatch from './useLyricsMatch'
+import useCoverMatch from './useCoverMatch'
 import useSearch from './useSearch'
 import useListScroll from './useListScroll'
 import { appSetting } from '@renderer/store/setting'
@@ -196,12 +198,21 @@ export default {
     } = useLyricsMatch()
 
     const {
+      isShowCoverMatch,
+      matchCoverMusicInfo,
+      openCoverMatch,
+      handleCoverMatchApplied,
+      handleCoverMatchRestored,
+    } = useCoverMatch()
+
+    const {
       handleCopyName,
       handleOpenFolder,
       handleMatchLyrics,
+      handleMatchCover,
       handleDislikeMusic,
       handleRemoveMusic,
-    } = useMusicActions({ props, list, removeAllSelect, selectedList, openLyricsMatch })
+    } = useMusicActions({ props, list, removeAllSelect, selectedList, openLyricsMatch, openCoverMatch })
 
     const {
       menus,
@@ -220,6 +231,7 @@ export default {
       handleCopyName,
       handleOpenFolder,
       handleMatchLyrics,
+      handleMatchCover,
       handleDislikeMusic,
       handleRemoveMusic,
     })
@@ -312,6 +324,11 @@ export default {
       isShowLyricsMatch,
       matchMusicInfo,
       handleLyricsMatchApplied,
+
+      isShowCoverMatch,
+      matchCoverMusicInfo,
+      handleCoverMatchApplied,
+      handleCoverMatchRestored,
 
       scrollToTop,
 

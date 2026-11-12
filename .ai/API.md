@@ -18,7 +18,8 @@
 事件名按组定义在 `src/common/ipcNames.ts`：
 `CMMON_EVENT_NAME`(common)、`PLAYER_EVENT_NAME`(player)、`DISLIKE_EVENT_NAME`(dislike)、
 `WIN_MAIN_RENDERER_EVENT_NAME`(winMain)、`WIN_LYRIC_RENDERER_EVENT_NAME`(winLyric)、
-`HOTKEY_RENDERER_EVENT_NAME`(hotKey)、`MEDIA_MATCH_EVENT_NAME`(media_match，事件名 `media_match_*`)。**不要硬编码字符串**，import 常量。
+`HOTKEY_RENDERER_EVENT_NAME`(hotKey)、`MEDIA_MATCH_EVENT_NAME`(media_match，事件名 `media_match_*`)、
+`COVER_MATCH_EVENT_NAME`(cover_match，事件名 `cover_match_*`)。**不要硬编码字符串**，import 常量。
 
 ### 渲染侧调用清单（`src/renderer/utils/ipc.ts`）
 - 设置：`getSetting`、`updateSetting`、`onSettingChanged`
@@ -29,8 +30,9 @@
   `saveListPrevSelectId`/`getListPrevSelectId`、`saveViewPrevState`/`getViewPrevState`
 - 歌词：`getPlayerLyric`、`getLyricRaw`、`clearLyricRaw`、`getLyricRawCount`、`getLyricEdited`、
   `saveLyric`、`saveLyricEdited`、`removeLyricEdited`、`clearLyric`、`clearLyricEdited`、`getLyricEditedCount`
-- 在线歌词匹配（`media_match_*`）：`mediaMatchSearch`、`mediaMatchGetLyric`、`mediaMatchApplyLrc`、
+- 在线歌词匹配（`media_match_*`）：`mediaMatchSearch`、`mediaMatchGetLyric`、`mediaMatchGetWordSync`、`mediaMatchApplyLrc`、
   `mediaMatchRollbackLrc`、`mediaMatchGetLrcState`
+- 在线封面匹配（`cover_match_*`）：`coverMatchSearch`、`coverMatchApply`、`coverMatchGetState`、`coverMatchRollback`
 - 主题：`getThemes`、`saveTheme`、`removeTheme`、`onThemeChange`
 - 音效预设：`getUserSoundEffectEQPresetList`/`save...`、`getUserSoundEffectConvolutionPresetList`/`save...`
 - 快捷键：`getHotKeyConfig`、`hotKeySetEnable`、`hotKeySetConfig`、`hotKeyGetStatus`、`onKeyDown`、`onUpdateHotkey`、`allHotKeys`
@@ -126,7 +128,8 @@ togglePlay/pause/stop/collectMusic/uncollectMusic/dislikeMusic/setMusicUrl`）�
 | --- | --- | --- |
 | `media_match_search` | `{ musicInfo, keyword? }` | `{ candidates: LX.MediaMatch.LyricsCandidate[] }` |
 | `media_match_get_lyric` | `{ candidate }` | `{ lyric, isSynced } \| null` |
-| `media_match_apply_lrc` | `{ musicInfo, candidate }` | `{ lrcPath, backupCreated }` |
+| `media_match_get_word_sync` | `{ candidate }` | `{ lyric, lxlyric } \| null`（仅 QQ QRC；失败返回 null） |
+| `media_match_apply_lrc` | `{ musicInfo, candidate }` | `{ lrcPath, backupCreated, hasWordSync }` |
 | `media_match_rollback_lrc` | `{ filePath }`（音频路径） | `{ restored }` |
 | `media_match_get_lrc_state` | `{ filePath }`（音频路径） | `LrcState` |
 
@@ -144,8 +147,41 @@ togglePlay/pause/stop/collectMusic/uncollectMusic/dislikeMusic/setMusicUrl`）�
   `Referer: https://y.qq.com/`）；业务码 `-1310/-1901/1101` 记 debug 并降级；不发送任何登录 Cookie。
 - `matcher.ts`：`lrclib -> qq` 两源并发（≤2）、`allSettled` 降级、聚合 → 打分 → 去重 → 排序（≤30）。
 - 纯逻辑在 `src/common/utils/mediaMatch/`：`normalize`（全角/清洗/伴奏标记）、`score`（0.5/0.3/0.2 + 伴奏减半）、
-  `query`（查询变体）、`lrcText`（LRC 生成 + 取词有效性校验）、`source`（内嵌/LRC 来源回退）、`qqParse`（QQ 响应解析）。
+  `query`（查询变体）、`lrcText`（LRC 生成 + 取词有效性校验）、`source`（内嵌/LRC 来源回退）、`qqParse`（QQ 响应解析）、
+  `qrcLyric`（QRC → 行级 LRC + lxlyric，见下）。
+- 逐字（QQ QRC）：`providers/qq.getWordSync` POST `https://u.y.qq.com/cgi-bin/musicu.fcg`
+  （`music.musichallSong.PlayLyricInfo / GetPlayLyricInfo`，`qrc:1` + `crypt:1` 必须同时给；外层 `code` 与 `req.code` 两级判定）。
+  hex → `common/utils/lyricUtils/qrc.js decodeQrc`（非标准 S-box 3DES + zlib，取自历史提交 `cb2798cb`）→ XML `LyricContent`
+  → `qrcLyric.parseQrcLyric`。转换铁律：行标签 `[mm:ss.xxx]` **3 位小数**；词级 `<start,dur>` 的 start **相对行首**；
+  `[kana:]` 等非时间轴行丢弃；无词级标签的行只进行级（保证 lxlyric 首行有词标签）。
+- 逐字写入：`buildAwlrcLrcText` 生成 `正文 + "\n\n" + [awlrc:lrc:<b64>,awlrc:<b64-lxlyric>] + "\n"`；标签独占一行、
+  `lrc:` 段与正文同源（桌面 `worker/main/music.ts parseLyric` 会用 `lrc:` 段覆盖正文）；无逐字时完全走一期行级逻辑。
 - 取词有效性（provider 层）：长度 <20 或命中 `未经许可|不得翻唱|纯音乐|暂无歌词` → 视为无歌词；
   有 ≥1 个 `[mm:ss]` 才算 `isSynced`。`LyricsCandidate.instrumental` 仅作 UI 提示，不参与硬过滤。
+
+## 7. 在线封面匹配（`src/main/modules/coverMatch/`）
+
+按歌曲信息向 QQ 音乐（主源）/ iTunes（回退）搜索封面候选，用户确认后由主进程下载并写成音频同目录同名
+`.jpg` / `.png`（**不内嵌、不改音频**）；渲染进程只做 UI，`worker/main/music.ts` 对同名图返回带 `?v=<mtimeMs>`
+的路径以击穿图片缓存。
+
+### IPC（`COVER_MATCH_EVENT_NAME`，事件名 `cover_match_*`）
+
+| 事件 | 参数 | 返回 |
+| --- | --- | --- |
+| `cover_match_search` | `{ musicInfo, keyword? }` | `{ candidates: LX.CoverMatch.CoverCandidate[] }`（≤20） |
+| `cover_match_apply` | `{ musicInfo, candidate }` | `{ imagePath, format: 'jpg'\|'png', backupCreated }` |
+| `cover_match_get_state` | `{ filePath }`（音频路径） | `CoverState` |
+| `cover_match_rollback` | `{ filePath }`（音频路径） | `{ restored }` |
+
+- 错误码：`COVER_MATCH_ERR:<invalid_music|file_not_found|invalid_candidate|download_failed|image_invalid|image_too_large|no_permission|disk_full|unknown>`；
+  渲染侧 `renderer/utils/coverMatch.ts` 解析并映射 i18n。
+- 源：QQ `client_search_cp` 取 `albummid` → `T002R500x500M000<albummid>.jpg`（缩略图 R150；下载 `Accept: image/jpeg,image/png`，
+  防 WebP）；iTunes `search?entity=song`（CJK 用 `country=jp`，否则 `us`，0 结果换 store；`100x100bb`→`600x600bb`）。
+  MusicBrainz/Deezer 二期不接（CAA 取图超时 / 本机不可达）。
+- 纯逻辑 `src/common/utils/coverMatch/score.ts`：0.5 标题 + 0.3 歌手 + 0.2 时长 + 专辑 `+0.05`（封顶 1）、伴奏 `*0.5`、
+  专辑维度去重（`source:id`）、≤20 条。
+- 文件规则（`coverMatch/coverFile.ts`）：只接受 JPEG/PNG magic、200–4000px、≤8MB；已有同名 jpg/png 先备份为 `.bak`
+  （只保留第一次备份），`.tmp` + rename 原子写，失败恢复；回退 = `.bak` 原子写回并删除备份。绝不改音频。
 
 不要复活 `core/music/online.ts` 那套「抓音源 + 换源」结构。

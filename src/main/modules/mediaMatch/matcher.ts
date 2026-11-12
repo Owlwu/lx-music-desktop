@@ -2,7 +2,7 @@ import { log } from '@common/utils'
 import { createKeywordQuery, createMatchQuery } from '@common/utils/mediaMatch/query'
 import { rankCandidates } from '@common/utils/mediaMatch/score'
 import lrclib from './providers/lrclib'
-import qq from './providers/qq'
+import qq, { getWordSync as getQqWordSync } from './providers/qq'
 
 // 源启用顺序固定：lrclib -> qq；单源失败自动跳过
 const providers: LX.MediaMatch.LyricsProvider[] = [lrclib, qq]
@@ -45,6 +45,22 @@ export const getCandidateLyric = async(
     return await provider.getLyric(candidate, signal)
   } catch (err) {
     log.debug('[mediaMatch] get lyric failed', candidate.source, err)
+    return null
+  }
+}
+
+/**
+ * 取候选的逐字数据（目前只有 QQ 提供；其他源/失败返回 null，调用方静默降级行级）
+ */
+export const getCandidateWordSync = async(
+  candidate: LX.MediaMatch.LyricsCandidate,
+  signal?: AbortSignal,
+): Promise<LX.MediaMatch.WordSyncResult | null> => {
+  if (candidate.source !== 'qq') return null
+  try {
+    return await getQqWordSync(candidate, signal)
+  } catch (err) {
+    log.debug('[mediaMatch] get word sync failed', candidate.source, err)
     return null
   }
 }

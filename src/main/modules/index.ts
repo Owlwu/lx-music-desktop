@@ -5,6 +5,7 @@ import registerAppMenu from './appMenu'
 import registerWinLyric from './winLyric'
 import registerCommonRenderers from './commonRenderers'
 import registerMediaMatch from './mediaMatch'
+import registerCoverMatch from './coverMatch'
 
 let isRegistered = false
 export default () => {
@@ -12,6 +13,7 @@ export default () => {
   registerCommonRenderers()
   registerWinMain()
   registerMediaMatch()
+  registerCoverMatch()
   registerHotKey()
   registerTray()
   registerAppMenu()

@@ -74,7 +74,7 @@ sendPlayerStatus(partial) → IPC `player_status` → main 更新 global.lx.play
 
 | 资源 | 取法 |
 | --- | --- |
-| 封面 | 优先 `renderer/worker/main/music.ts getMusicFilePic(filePath)`（内嵌封面 `selectCover`；先找同名 `.jpg`/`.png`）；其次 `musicInfo.meta.picUrl`（历史缓存/未来匹配结果） |
+| 封面 | 优先 `renderer/worker/main/music.ts getMusicFilePic(filePath)`（内嵌封面 `selectCover`；先找同名 `.jpg`/`.png`，返回路径带 `?v=<mtimeMs>` 以击穿图片缓存）；其次 `musicInfo.meta.picUrl`（历史缓存/匹配结果） |
 | 歌词 | `getCachedLyricInfo(musicInfo)`（DB `lyric` 的 raw/edited）与 `getMusicFileLyric(filePath)` 并行取：worker 一次返回 `{ embedded, lrc }`，`embedded` 为内嵌（ID3 `USLT`/`LYRICS`、FLAC `LYRICS`），`lrc` 为同名 `.lrc`（`jschardet` 探测编码 + `iconv-lite` 解码）→ 无则同名 `.krc`（`decodeKrc`）；`core/music/local.ts` 按 `meta.lyricSource ?? player.lyricSource`（默认 `embedded`）选择，所选来源为空时自动回退另一来源；若已编辑歌词与文件歌词不一致，用已编辑歌词并保留文件原词作 `rawlrcInfo` |
 | 显示转换 | `buildLyricInfo()` 处理繁简转换（`player.isS2t`）并补齐 `rawlrcInfo` |
 
@@ -89,15 +89,43 @@ sendPlayerStatus(partial) → IPC `player_status` → main 更新 global.lx.play
           └─ providers/qq.ts（client_search_cp 搜索；取词时才请求 fcg_query_lyric_new，必须 Referer）
       → 聚合 → common/utils/mediaMatch/score.ts 打分 → 去重 → 排序（≤30）
   → 选中候选 → IPC media_match_get_lyric { candidate }（QQ 无歌词时前端自动试下 1–2 个候选）
+  → QQ 候选并行 IPC media_match_get_word_sync { candidate }
+      → providers/qq.getWordSync POST musicu.fcg（qrc:1 + crypt:1）→ qrc.js decodeQrc → qrcLyric.parseQrcLyric
+      → 返回 { lyric, lxlyric }；失败返回 null（静默降级行级）
   → 应用 → IPC media_match_apply_lrc
+      → 有逐字：正文 = QRC 行级歌词（+本地头部）+ buildAwlrcLrcText 的 [awlrc:lrc,awlrc]；
+        无逐字：走一期 buildLrcText
       → main lrcFile.applyLrc()：同名 .lrc 已存在且无 .bak 先备份 → 写 .tmp → rename
-      → 返回 { lrcPath, backupCreated }；失败自动恢复备份并返回错误码
+      → 返回 { lrcPath, backupCreated, hasWordSync }；失败自动恢复备份并返回错误码
   → 渲染：meta.lyricSource='lrc' → updateListMusics 持久化 → 若为当前歌曲 refreshPlayLyric()
 ```
 
 - 回退：歌词菜单「恢复原始 LRC」→ `media_match_rollback_lrc`（删除当前 `.lrc`，`.lrc.bak` 改回）。
 - 来源切换：歌词菜单单选写入 `meta.lyricSource`，不写文件；菜单展示实际生效来源。
-- 约束：绝不改音频、不写封面；所有路径由主进程校验；日志不打印歌词正文。
+- 逐字：`[awlrc:]` 由桌面 `worker/main/music.ts parseLyric` 解析出 `lxlyric`，`player.isPlayLxlrc` 开启时逐字渲染；
+  移动端会剥掉标签、退化为行级。
+- 约束：绝不改音频、不写封面；所有路径由主进程校验；日志不打印歌词正文/密文。
+
+## 3.2 在线封面匹配（外挂同名图片）
+
+```
+列表右键「匹配封面」
+  → views/List/MusicList/useCoverMatch.js（状态）+ components/common/CoverMatchModal.vue（UI）
+  → IPC cover_match_search { musicInfo, keyword? }
+      → main/modules/coverMatch/rendererEvent.ts → matcher.ts
+          ├─ providers/qq.ts（client_search_cp 搜索 → albummid → R500/R150 封面 URL）
+          └─ providers/itunes.ts（entity=song，CJK 用 country=jp，否则 us；100x100bb → 600x600bb）
+      → common/utils/coverMatch/score.ts 打分（标题/歌手/时长 + 专辑加分）→ 专辑去重 → ≤20
+  → 应用 → IPC cover_match_apply { musicInfo, candidate }
+      → matcher.downloadCoverImage（10s / ≤8MB / 1 retry / LRU10）
+      → coverFile.applyCoverImage：magic + 宽高校验 → 旧 jpg/png 备份 .bak → .tmp + rename
+      → 返回 { imagePath, format, backupCreated }
+  → 渲染：若为当前歌曲 refreshPlayCover()（getPicPath → setMusicInfo({pic}) → picUpdated）
+```
+
+- 回退：弹窗「恢复原封面」→ `cover_match_rollback`（`.bak` 原子写回，删除备份）。
+- 状态：`cover_match_get_state` 返回 imageExists/backupExists/size/mtime。
+- 约束：不内嵌、不改音频；只写同目录同名 `.jpg`/`.png`（小写）；webp 拒绝（读取链路只认 jpg/png）。
 
 ## 4. IPC 通用往返
 
@@ -111,7 +139,8 @@ main:      mainHandle(name, handler)      可返回值
 ```
 
 - 渲染侧调用清单：`src/renderer/utils/ipc.ts`（设置、歌词、列表数据、同步、窗口、快捷键、主题、音效预设、播放状态）。
-- 主侧处理器：`src/main/modules/winMain/rendererEvent/*`（+ `winLyric/rendererEvent.ts`、`commonRenderers/*`、`mediaMatch/rendererEvent.ts`）。
+- 主侧处理器：`src/main/modules/winMain/rendererEvent/*`（+ `winLyric/rendererEvent.ts`、`commonRenderers/*`、
+  `mediaMatch/rendererEvent.ts`、`coverMatch/rendererEvent.ts`）。
 - `save_data`/`get_data` 承担小型 blob 持久化（键见 `DATA_KEYS`）。
 
 ## 5. 持久化流程

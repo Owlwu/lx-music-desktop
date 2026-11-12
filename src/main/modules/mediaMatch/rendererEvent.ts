@@ -1,9 +1,10 @@
 import { MEDIA_MATCH_EVENT_NAME } from '@common/ipcNames'
 import { mainHandle } from '@common/mainIpc'
 import { buildLrcText } from '@common/utils/mediaMatch/lrcText'
+import { buildAwlrcLrcText } from '@common/utils/mediaMatch/qrcLyric'
 import { checkPath } from '@common/utils/nodejs'
 import { log } from '@common/utils'
-import { createQuery, getCandidateLyric, searchCandidates } from './matcher'
+import { createQuery, getCandidateLyric, getCandidateWordSync, searchCandidates } from './matcher'
 import { applyLrc, getLrcState, LrcFileError, rollbackLrc } from './lrcFile'
 
 const SEARCH_TIMEOUT = 15000
@@ -42,6 +43,26 @@ const applyLyricFile = async(
   musicInfo: LX.Music.MusicInfo,
   candidate: LX.MediaMatch.LyricsCandidate,
 ): Promise<LX.MediaMatch.ApplyResult> => {
+  // QQ 候选先尝试逐字：成功且可用 → 正文用 QRC 转出的行级歌词，并追加 [awlrc:]
+  const wordSync = candidate.source === 'qq' ? await getCandidateWordSync(candidate) : null
+  if (wordSync?.lyric.trim() && wordSync.lxlyric.trim()) {
+    const body = buildLrcText({
+      name: musicInfo.name,
+      singer: musicInfo.singer,
+      albumName: musicInfo.meta.albumName,
+      lyric: wordSync.lyric,
+      isSynced: true,
+    })
+    if (!body) throw mediaMatchError('no_lyric')
+    try {
+      const result = await applyLrc(musicInfo.meta.filePath, buildAwlrcLrcText(body, wordSync.lxlyric))
+      return { ...result, hasWordSync: true }
+    } catch (err) {
+      throw toIpcError(err, lrcFileErrorPrefix)
+    }
+  }
+
+  // 一期逻辑（无逐字 / 逐字失败时完全不变）
   const lyricResult = await getCandidateLyric(candidate)
   if (!lyricResult?.lyric.trim()) throw mediaMatchError('no_lyric')
 
@@ -55,7 +76,8 @@ const applyLyricFile = async(
   if (!text) throw mediaMatchError('no_lyric')
 
   try {
-    return await applyLrc(musicInfo.meta.filePath, text)
+    const result = await applyLrc(musicInfo.meta.filePath, text)
+    return { ...result, hasWordSync: false }
   } catch (err) {
     throw toIpcError(err, lrcFileErrorPrefix)
   }
@@ -87,6 +109,11 @@ export default () => {
   mainHandle<LX.MediaMatch.GetLyricParams, LX.MediaMatch.LyricResult | null>(MEDIA_MATCH_EVENT_NAME.get_lyric, async({ params }) => {
     const candidate = assertCandidate(params?.candidate)
     return getCandidateLyric(candidate)
+  })
+
+  mainHandle<LX.MediaMatch.GetWordSyncParams, LX.MediaMatch.WordSyncResult | null>(MEDIA_MATCH_EVENT_NAME.get_word_sync, async({ params }) => {
+    const candidate = assertCandidate(params?.candidate)
+    return getCandidateWordSync(candidate)
   })
 
   mainHandle<LX.MediaMatch.ApplyParams, LX.MediaMatch.ApplyResult>(MEDIA_MATCH_EVENT_NAME.apply_lrc, async({ params }) => {

@@ -1,5 +1,5 @@
 import { rendererSend, rendererInvoke, rendererOn, rendererOff } from '@common/rendererIpc'
-import { HOTKEY_RENDERER_EVENT_NAME, WIN_MAIN_RENDERER_EVENT_NAME, CMMON_EVENT_NAME, MEDIA_MATCH_EVENT_NAME } from '@common/ipcNames'
+import { HOTKEY_RENDERER_EVENT_NAME, WIN_MAIN_RENDERER_EVENT_NAME, CMMON_EVENT_NAME, MEDIA_MATCH_EVENT_NAME, COVER_MATCH_EVENT_NAME } from '@common/ipcNames'
 import { markRaw } from '@common/utils/vueTools'
 import * as hotKeys from '@common/hotKey'
 import { APP_EVENT_NAMES, DATA_KEYS, DEFAULT_SETTING } from '@common/constants'
@@ -466,6 +466,41 @@ export const mediaMatchRollbackLrc = async(filePath: string) => {
  */
 export const mediaMatchGetLrcState = async(filePath: string) => {
   return rendererInvoke<LX.MediaMatch.FilePathParams, LX.MediaMatch.LrcState>(MEDIA_MATCH_EVENT_NAME.get_lrc_state, { filePath })
+}
+
+/**
+ * 在线匹配歌词：获取候选的逐字数据（QQ QRC；无逐字能力的源返回 null）
+ */
+export const mediaMatchGetWordSync = async(params: LX.MediaMatch.GetWordSyncParams) => {
+  return rendererInvoke<LX.MediaMatch.GetWordSyncParams, LX.MediaMatch.WordSyncResult | null>(MEDIA_MATCH_EVENT_NAME.get_word_sync, params)
+}
+
+/**
+ * 在线匹配封面：搜索候选
+ */
+export const coverMatchSearch = async(params: LX.CoverMatch.SearchParams) => {
+  return rendererInvoke<LX.CoverMatch.SearchParams, LX.CoverMatch.SearchResult>(COVER_MATCH_EVENT_NAME.search, params)
+}
+
+/**
+ * 在线匹配封面：下载并写入同名封面（主进程负责校验/备份/原子写）
+ */
+export const coverMatchApply = async(params: LX.CoverMatch.ApplyParams) => {
+  return rendererInvoke<LX.CoverMatch.ApplyParams, LX.CoverMatch.ApplyResult>(COVER_MATCH_EVENT_NAME.apply, params)
+}
+
+/**
+ * 在线匹配封面：查询同名封面 / 备份状态
+ */
+export const coverMatchGetState = async(filePath: string) => {
+  return rendererInvoke<LX.CoverMatch.FilePathParams, LX.CoverMatch.CoverState>(COVER_MATCH_EVENT_NAME.get_state, { filePath })
+}
+
+/**
+ * 在线匹配封面：恢复 `.bak` 备份
+ */
+export const coverMatchRollback = async(filePath: string) => {
+  return rendererInvoke<LX.CoverMatch.FilePathParams, LX.CoverMatch.RollbackResult>(COVER_MATCH_EVENT_NAME.rollback, { filePath })
 }
 
 
