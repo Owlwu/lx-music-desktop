@@ -10,7 +10,7 @@ import { openDirInExplorer } from '@renderer/utils/ipc'
 import { checkPath } from '@common/utils/nodejs'
 
 
-export default ({ props, list, selectedList, removeAllSelect }) => {
+export default ({ props, list, selectedList, removeAllSelect, openLyricsMatch }) => {
   const t = useI18n()
 
   const handleCopyName = index => {
@@ -24,6 +24,12 @@ export default ({ props, list, selectedList, removeAllSelect }) => {
     const filePath = minfo.meta.filePath
     if (!filePath || !await checkPath(filePath)) return
     await openDirInExplorer(filePath)
+  }
+
+  const handleMatchLyrics = (index) => {
+    const minfo = list.value[index]
+    if (!minfo || minfo.source !== 'local') return
+    openLyricsMatch(minfo, props.listId)
   }
 
   const handleDislikeMusic = async(index) => {
@@ -60,6 +66,7 @@ export default ({ props, list, selectedList, removeAllSelect }) => {
   return {
     handleCopyName,
     handleOpenFolder,
+    handleMatchLyrics,
     handleDislikeMusic,
     handleRemoveMusic,
   }

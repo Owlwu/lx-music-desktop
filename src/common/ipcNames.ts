@@ -133,6 +133,13 @@ const modules = {
     status: 'status',
     set_config: 'set_config',
   },
+  media_match: {
+    search: 'search',
+    get_lyric: 'get_lyric',
+    apply_lrc: 'apply_lrc',
+    rollback_lrc: 'rollback_lrc',
+    get_lrc_state: 'get_lrc_state',
+  },
 }
 
 
@@ -157,3 +164,4 @@ export const DISLIKE_EVENT_NAME = modules.dislike
 export const WIN_MAIN_RENDERER_EVENT_NAME = modules.winMain
 export const WIN_LYRIC_RENDERER_EVENT_NAME = modules.winLyric
 export const HOTKEY_RENDERER_EVENT_NAME = modules.hotKey
+export const MEDIA_MATCH_EVENT_NAME = modules.media_match

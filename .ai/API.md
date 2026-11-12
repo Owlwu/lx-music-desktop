@@ -18,7 +18,7 @@
 事件名按组定义在 `src/common/ipcNames.ts`：
 `CMMON_EVENT_NAME`(common)、`PLAYER_EVENT_NAME`(player)、`DISLIKE_EVENT_NAME`(dislike)、
 `WIN_MAIN_RENDERER_EVENT_NAME`(winMain)、`WIN_LYRIC_RENDERER_EVENT_NAME`(winLyric)、
-`HOTKEY_RENDERER_EVENT_NAME`(hotKey)。**不要硬编码字符串**，import 常量。
+`HOTKEY_RENDERER_EVENT_NAME`(hotKey)、`MEDIA_MATCH_EVENT_NAME`(media_match，事件名 `media_match_*`)。**不要硬编码字符串**，import 常量。
 
 ### 渲染侧调用清单（`src/renderer/utils/ipc.ts`）
 - 设置：`getSetting`、`updateSetting`、`onSettingChanged`
@@ -29,6 +29,8 @@
   `saveListPrevSelectId`/`getListPrevSelectId`、`saveViewPrevState`/`getViewPrevState`
 - 歌词：`getPlayerLyric`、`getLyricRaw`、`clearLyricRaw`、`getLyricRawCount`、`getLyricEdited`、
   `saveLyric`、`saveLyricEdited`、`removeLyricEdited`、`clearLyric`、`clearLyricEdited`、`getLyricEditedCount`
+- 在线歌词匹配（`media_match_*`）：`mediaMatchSearch`、`mediaMatchGetLyric`、`mediaMatchApplyLrc`、
+  `mediaMatchRollbackLrc`、`mediaMatchGetLrcState`
 - 主题：`getThemes`、`saveTheme`、`removeTheme`、`onThemeChange`
 - 音效预设：`getUserSoundEffectEQPresetList`/`save...`、`getUserSoundEffectConvolutionPresetList`/`save...`
 - 快捷键：`getHotKeyConfig`、`hotKeySetEnable`、`hotKeySetConfig`、`hotKeyGetStatus`、`onKeyDown`、`onUpdateHotkey`、`allHotKeys`
@@ -81,7 +83,7 @@
 `src/renderer/worker/main/`，Comlink 包装（`src/renderer/worker/utils/index.ts`）：
 - `createLocalMusicInfos(filePaths)` — 批量解析本地文件元数据（`utils/music.ts`）
 - `getMusicFilePic(filePath)` — 内嵌/同名封面
-- `getMusicFileLyric(filePath)` — 内嵌/同名 `.lrc`/`.krc` 歌词
+- `getMusicFileLyric(filePath)` — 一次返回 `{ embedded, lrc }` 两种来源（内嵌 `LYRICS`/`USLT`；同名 `.lrc` → `.krc`）
 - 列表工具：排序、过滤、查重、导入导出、列表内搜索等（`worker/main/list.ts`）
 - `proxyCallback(fn)`（`Comlink.proxy`）把回调传回渲染进程
 
@@ -113,12 +115,37 @@
 togglePlay/pause/stop/collectMusic/uncollectMusic/dislikeMusic/setMusicUrl`）。
 音频引擎：`src/renderer/plugins/player/`（`setPlay/setPause/setStop/setResource/isEmpty` + Web Audio 图）。
 
-## 6. 后续联网功能的预留接口（尚未实现）
+## 6. 在线歌词匹配（`src/main/modules/mediaMatch/`）
 
-规划中的「在线匹配歌词 / 封面」应作为独立小模块实现，复用：
-- `common/utils/request.ts`（undici + 重试 + 代理；主进程侧 `main/utils/request.ts` 封装 `httpFetch`）
-- 歌词写回：IPC `save_lyric_raw` / `save_lyric_edited`（已有）
-- 封面写回：`musicInfo.meta.picUrl` + `store/list/action.updateListMusics`（已有）
-- 代理配置：`network.proxy.*` + `views/Setting/components/SettingNetwork.vue`
+按歌曲信息向 LRCLIB / QQ 音乐查询候选，用户确认后由主进程写成音频同目录同名 `.lrc`；
+渲染进程只做 UI 与列表 `meta.lyricSource` 更新，**不直接写文件**。
+
+### IPC（`MEDIA_MATCH_EVENT_NAME`，事件名 `media_match_*`）
+
+| 事件 | 参数 | 返回 |
+| --- | --- | --- |
+| `media_match_search` | `{ musicInfo, keyword? }` | `{ candidates: LX.MediaMatch.LyricsCandidate[] }` |
+| `media_match_get_lyric` | `{ candidate }` | `{ lyric, isSynced } \| null` |
+| `media_match_apply_lrc` | `{ musicInfo, candidate }` | `{ lrcPath, backupCreated }` |
+| `media_match_rollback_lrc` | `{ filePath }`（音频路径） | `{ restored }` |
+| `media_match_get_lrc_state` | `{ filePath }`（音频路径） | `LrcState` |
+
+- 错误码以字符串前缀跨 IPC 传递：`MEDIA_MATCH_ERR:<code>`、`MEDIA_MATCH_LRC_ERR:<no_permission|disk_full|unknown>`；
+  渲染侧 `renderer/utils/mediaMatch.ts` 负责解析与 i18n 映射。
+- 路径安全：主进程 `checkPath` + `lrcFile.isAudioFilePath` 双重校验；只写音频所在目录的同名 `.lrc`。
+- 文件规则（`lrcFile.ts`）：已有 `.lrc` 且无 `.lrc.bak` 时先备份；临时文件 + rename 原子写；失败自动恢复备份；
+  回退 = 删除当前 `.lrc` 并把 `.lrc.bak` 改回。绝不改动音频文件。
+
+### 数据源与纯逻辑
+
+- `providers/lrclib.ts`：搜索（结构化 → `q=` 回退）、`/api/get/{id}` 按需取词；进程内 LRU（≤50）缓存搜索内联歌词；
+  UA、串行 ≥260ms、10s 超时、2MB 上限、429/503 `Retry-After` + 抖动退避（≤2 次）。
+- `providers/qq.ts`：`client_search_cp` 搜索 + `fcg_query_lyric_new.fcg` 取词（`nobase64=1`，**必须**带
+  `Referer: https://y.qq.com/`）；业务码 `-1310/-1901/1101` 记 debug 并降级；不发送任何登录 Cookie。
+- `matcher.ts`：`lrclib -> qq` 两源并发（≤2）、`allSettled` 降级、聚合 → 打分 → 去重 → 排序（≤30）。
+- 纯逻辑在 `src/common/utils/mediaMatch/`：`normalize`（全角/清洗/伴奏标记）、`score`（0.5/0.3/0.2 + 伴奏减半）、
+  `query`（查询变体）、`lrcText`（LRC 生成 + 取词有效性校验）、`source`（内嵌/LRC 来源回退）、`qqParse`（QQ 响应解析）。
+- 取词有效性（provider 层）：长度 <20 或命中 `未经许可|不得翻唱|纯音乐|暂无歌词` → 视为无歌词；
+  有 ≥1 个 `[mm:ss]` 才算 `isSynced`。`LyricsCandidate.instrumental` 仅作 UI 提示，不参与硬过滤。
 
 不要复活 `core/music/online.ts` 那套「抓音源 + 换源」结构。

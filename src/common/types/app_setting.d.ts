@@ -153,6 +153,11 @@ declare global {
       'player.isPlayLxlrc': boolean
 
       /**
+       * 全局默认歌词来源
+       */
+      'player.lyricSource': LX.MediaMatch.LyricSource
+
+      /**
        * 启动软件时是否恢复上次播放进度
        */
       'player.isSavePlayTime': boolean

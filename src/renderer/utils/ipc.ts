@@ -1,5 +1,5 @@
 import { rendererSend, rendererInvoke, rendererOn, rendererOff } from '@common/rendererIpc'
-import { HOTKEY_RENDERER_EVENT_NAME, WIN_MAIN_RENDERER_EVENT_NAME, CMMON_EVENT_NAME } from '@common/ipcNames'
+import { HOTKEY_RENDERER_EVENT_NAME, WIN_MAIN_RENDERER_EVENT_NAME, CMMON_EVENT_NAME, MEDIA_MATCH_EVENT_NAME } from '@common/ipcNames'
 import { markRaw } from '@common/utils/vueTools'
 import * as hotKeys from '@common/hotKey'
 import { APP_EVENT_NAMES, DATA_KEYS, DEFAULT_SETTING } from '@common/constants'
@@ -431,6 +431,41 @@ export const clearLyricEdited = async() => {
 
 export const getLyricEditedCount = async() => {
   return rendererInvoke<number>(WIN_MAIN_RENDERER_EVENT_NAME.get_lyric_edited_count)
+}
+
+/**
+ * 在线匹配歌词：搜索候选
+ */
+export const mediaMatchSearch = async(params: LX.MediaMatch.SearchParams) => {
+  return rendererInvoke<LX.MediaMatch.SearchParams, LX.MediaMatch.SearchResult>(MEDIA_MATCH_EVENT_NAME.search, params)
+}
+
+/**
+ * 在线匹配歌词：获取候选歌词文本
+ */
+export const mediaMatchGetLyric = async(params: LX.MediaMatch.GetLyricParams) => {
+  return rendererInvoke<LX.MediaMatch.GetLyricParams, LX.MediaMatch.LyricResult | null>(MEDIA_MATCH_EVENT_NAME.get_lyric, params)
+}
+
+/**
+ * 在线匹配歌词：写入同名 LRC（主进程负责备份/原子写）
+ */
+export const mediaMatchApplyLrc = async(params: LX.MediaMatch.ApplyParams) => {
+  return rendererInvoke<LX.MediaMatch.ApplyParams, LX.MediaMatch.ApplyResult>(MEDIA_MATCH_EVENT_NAME.apply_lrc, params)
+}
+
+/**
+ * 在线匹配歌词：回退到 .lrc.bak
+ */
+export const mediaMatchRollbackLrc = async(filePath: string) => {
+  return rendererInvoke<LX.MediaMatch.FilePathParams, LX.MediaMatch.RollbackResult>(MEDIA_MATCH_EVENT_NAME.rollback_lrc, { filePath })
+}
+
+/**
+ * 在线匹配歌词：查询同名 LRC / 备份状态
+ */
+export const mediaMatchGetLrcState = async(filePath: string) => {
+  return rendererInvoke<LX.MediaMatch.FilePathParams, LX.MediaMatch.LrcState>(MEDIA_MATCH_EVENT_NAME.get_lrc_state, { filePath })
 }
 
 

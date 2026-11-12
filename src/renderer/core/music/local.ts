@@ -1,5 +1,7 @@
 import { encodePath } from '@common/utils/common'
+import { getPreferredLyricSource, resolveLyricSource } from '@common/utils/mediaMatch/source'
 import { updateListMusics } from '@renderer/store/list/action'
+import { appSetting } from '@renderer/store/setting'
 import { getLocalFilePath } from '@renderer/utils/music'
 
 import {
@@ -38,8 +40,20 @@ export const getLyricInfo = async({ musicInfo, isRefresh }: {
   isRefresh?: boolean
 }): Promise<LX.Player.LyricInfo> => {
   if (!isRefresh) {
-    const [lyricInfo, fileLyricInfo] = await Promise.all([getCachedLyricInfo(musicInfo), window.lx.worker.main.getMusicFileLyric(musicInfo.meta.filePath)])
-    // console.log(lyricInfo, fileLyricInfo)
+    const [lyricInfo, fileLyric] = await Promise.all([
+      getCachedLyricInfo(musicInfo),
+      window.lx.worker.main.getMusicFileLyric(musicInfo.meta.filePath),
+    ])
+    const preferred = getPreferredLyricSource(musicInfo.meta.lyricSource, appSetting['player.lyricSource'])
+    const actualSource = resolveLyricSource(
+      !!fileLyric?.embedded?.lyric,
+      !!fileLyric?.lrc?.lyric,
+      preferred,
+    )
+    const fileLyricInfo = actualSource === 'lrc'
+      ? fileLyric?.lrc
+      : actualSource === 'embedded' ? fileLyric?.embedded : null
+
     if (lyricInfo?.lyric && lyricInfo.lyric != fileLyricInfo?.lyric) {
       // 存在已编辑歌词
       return buildLyricInfo({ ...lyricInfo, rawlrcInfo: fileLyricInfo ?? lyricInfo.rawlrcInfo })

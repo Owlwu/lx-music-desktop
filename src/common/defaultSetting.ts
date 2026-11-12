@@ -34,6 +34,7 @@ const defaultSetting: LX.AppSetting = {
   'player.isSwapLyricTranslationAndRoma': false,
   'player.isS2t': false,
   'player.isPlayLxlrc': !isMac,
+  'player.lyricSource': 'embedded',
   'player.isSavePlayTime': false,
   'player.audioVisualization': false,
   'player.waitPlayEndStop': true,

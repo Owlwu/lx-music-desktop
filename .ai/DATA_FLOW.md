@@ -75,8 +75,29 @@ sendPlayerStatus(partial) → IPC `player_status` → main 更新 global.lx.play
 | 资源 | 取法 |
 | --- | --- |
 | 封面 | 优先 `renderer/worker/main/music.ts getMusicFilePic(filePath)`（内嵌封面 `selectCover`；先找同名 `.jpg`/`.png`）；其次 `musicInfo.meta.picUrl`（历史缓存/未来匹配结果） |
-| 歌词 | `getCachedLyricInfo(musicInfo)`（DB `lyric` 的 raw/edited）与 `getMusicFileLyric(filePath)` 并行取：优先内嵌（ID3 `USLT`/`LYRICS`、FLAC `LYRICS`），再同名 `.lrc`（`jschardet` 探测编码 + `iconv-lite` 解码）与同名 `.krc`（`decodeKrc`）；若已编辑歌词与文件歌词不一致，用已编辑歌词并保留文件原词作 `rawlrcInfo` |
+| 歌词 | `getCachedLyricInfo(musicInfo)`（DB `lyric` 的 raw/edited）与 `getMusicFileLyric(filePath)` 并行取：worker 一次返回 `{ embedded, lrc }`，`embedded` 为内嵌（ID3 `USLT`/`LYRICS`、FLAC `LYRICS`），`lrc` 为同名 `.lrc`（`jschardet` 探测编码 + `iconv-lite` 解码）→ 无则同名 `.krc`（`decodeKrc`）；`core/music/local.ts` 按 `meta.lyricSource ?? player.lyricSource`（默认 `embedded`）选择，所选来源为空时自动回退另一来源；若已编辑歌词与文件歌词不一致，用已编辑歌词并保留文件原词作 `rawlrcInfo` |
 | 显示转换 | `buildLyricInfo()` 处理繁简转换（`player.isS2t`）并补齐 `rawlrcInfo` |
+
+## 3.1 在线歌词匹配（外挂 LRC）
+
+```
+列表右键「在线匹配歌词」 / 播放详情歌词菜单「匹配歌词」
+  → views/List/MusicList/useLyricsMatch.js（状态）+ components/common/LyricsMatchModal.vue（UI）
+  → IPC media_match_search { musicInfo, keyword? }
+      → main/modules/mediaMatch/rendererEvent.ts → matcher.ts
+          ├─ providers/lrclib.ts（结构化 → q= 回退；进程内 LRU 缓存搜索内联歌词）
+          └─ providers/qq.ts（client_search_cp 搜索；取词时才请求 fcg_query_lyric_new，必须 Referer）
+      → 聚合 → common/utils/mediaMatch/score.ts 打分 → 去重 → 排序（≤30）
+  → 选中候选 → IPC media_match_get_lyric { candidate }（QQ 无歌词时前端自动试下 1–2 个候选）
+  → 应用 → IPC media_match_apply_lrc
+      → main lrcFile.applyLrc()：同名 .lrc 已存在且无 .bak 先备份 → 写 .tmp → rename
+      → 返回 { lrcPath, backupCreated }；失败自动恢复备份并返回错误码
+  → 渲染：meta.lyricSource='lrc' → updateListMusics 持久化 → 若为当前歌曲 refreshPlayLyric()
+```
+
+- 回退：歌词菜单「恢复原始 LRC」→ `media_match_rollback_lrc`（删除当前 `.lrc`，`.lrc.bak` 改回）。
+- 来源切换：歌词菜单单选写入 `meta.lyricSource`，不写文件；菜单展示实际生效来源。
+- 约束：绝不改音频、不写封面；所有路径由主进程校验；日志不打印歌词正文。
 
 ## 4. IPC 通用往返
 
@@ -90,7 +111,7 @@ main:      mainHandle(name, handler)      可返回值
 ```
 
 - 渲染侧调用清单：`src/renderer/utils/ipc.ts`（设置、歌词、列表数据、同步、窗口、快捷键、主题、音效预设、播放状态）。
-- 主侧处理器：`src/main/modules/winMain/rendererEvent/*`（+ `winLyric/rendererEvent.ts`、`commonRenderers/*`）。
+- 主侧处理器：`src/main/modules/winMain/rendererEvent/*`（+ `winLyric/rendererEvent.ts`、`commonRenderers/*`、`mediaMatch/rendererEvent.ts`）。
 - `save_data`/`get_data` 承担小型 blob 持久化（键见 `DATA_KEYS`）。
 
 ## 5. 持久化流程

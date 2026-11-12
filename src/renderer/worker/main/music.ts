@@ -1,4 +1,4 @@
-import { getLocalMusicFileLyric, getLocalMusicFilePic } from '@renderer/utils/music'
+import { getLocalMusicFileEmbeddedLyric, getLocalMusicFileLrcLyric, getLocalMusicFilePic } from '@renderer/utils/music'
 import path from 'node:path'
 import os from 'node:os'
 import fs from 'node:fs/promises'
@@ -78,8 +78,21 @@ export const parseLyric = (lrc: string): LX.Music.LyricInfo => {
 }
 
 
-export const getMusicFileLyric = async(filePath: string): Promise<LX.Music.LyricInfo | null> => {
-  const lyric = await getLocalMusicFileLyric(filePath)
-  if (!lyric) return null
-  return parseLyric(lyric.lyric)
+export const getMusicFileLyric = async(filePath: string): Promise<{
+  embedded: LX.Music.LyricInfo | null
+  lrc: LX.Music.LyricInfo | null
+}> => {
+  const [embedded, lrc] = await Promise.all([
+    getLocalMusicFileEmbeddedLyric(filePath),
+    getLocalMusicFileLrcLyric(filePath),
+  ])
+  const parse = (info: LX.Music.LyricInfo | null): LX.Music.LyricInfo | null => {
+    if (!info) return null
+    const parsedInfo = parseLyric(info.lyric)
+    return { ...info, ...parsedInfo }
+  }
+  return {
+    embedded: parse(embedded),
+    lrc: parse(lrc),
+  }
 }

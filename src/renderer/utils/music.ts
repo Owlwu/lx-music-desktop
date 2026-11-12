@@ -90,47 +90,10 @@ export const getLocalMusicFilePic = async(path: string) => {
 type IComment = NonNullable<IAudioMetadata['common']['comment']> extends Array<infer U> ? U : never
 
 /**
- * 获取歌曲文件歌词
+ * 获取音频文件内嵌歌词（LYRICS / USLT）
  * @param path 路径
  */
-export const getLocalMusicFileLyric = async(path: string): Promise<LX.Music.LyricInfo | null> => {
-  // 尝试读取同目录下的同名lrc文件
-  const filePath = new RegExp('\\' + extname(path) + '$')
-  let lrcPath = path.replace(filePath, '.lrc')
-  let stats = await getFileStats(lrcPath)
-  // console.log(lrcPath, stats)
-  if (stats && stats.size < 1024 * 1024 * 10) {
-    const lrcBuf = await readFile(lrcPath)
-    const { detect } = await import('jschardet')
-    const { confidence, encoding } = detect(lrcBuf)
-    console.log('lrc file encoding', confidence, encoding)
-    if (confidence > 0.8) {
-      const iconv = (await import('iconv-lite')).default
-      if (iconv.encodingExists(encoding)) {
-        const lrc = iconv.decode(lrcBuf, encoding)
-        if (lrc) {
-          return {
-            lyric: lrc,
-          }
-        }
-      }
-    }
-  }
-  // 尝试读取同目录下的同名krc文件
-  lrcPath = path.replace(filePath, '.krc')
-  stats = await getFileStats(lrcPath)
-  console.log(lrcPath, stats?.size)
-  if (stats && stats.size < 1024 * 1024 * 10) {
-    const lrcBuf = await readFile(lrcPath)
-    try {
-      return await decodeKrc(lrcBuf)
-    } catch (e) {
-      console.log(e)
-    }
-  }
-
-
-  // 尝试读取文件内歌词
+export const getLocalMusicFileEmbeddedLyric = async(path: string): Promise<LX.Music.LyricInfo | null> => {
   const metadata = await getFileMetadata(path)
   if (!metadata) return null
   for (const info of Object.values(metadata.native)) {
@@ -149,5 +112,47 @@ export const getLocalMusicFileLyric = async(path: string): Promise<LX.Music.Lyri
       }
     }
   }
+  return null
+}
+
+/**
+ * 获取歌曲同目录下的同名 .lrc / .krc 外挂歌词（不含内嵌）
+ * @param path 路径
+ */
+export const getLocalMusicFileLrcLyric = async(path: string): Promise<LX.Music.LyricInfo | null> => {
+  const filePath = new RegExp('\\' + extname(path) + '$')
+
+  // 尝试读取同目录下的同名lrc文件
+  let lrcPath = path.replace(filePath, '.lrc')
+  let stats = await getFileStats(lrcPath)
+  if (stats && stats.size < 1024 * 1024 * 10) {
+    const lrcBuf = await readFile(lrcPath)
+    const { detect } = await import('jschardet')
+    const { confidence, encoding } = detect(lrcBuf)
+    if (confidence > 0.8) {
+      const iconv = (await import('iconv-lite')).default
+      if (iconv.encodingExists(encoding)) {
+        const lrc = iconv.decode(lrcBuf, encoding)
+        if (lrc) {
+          return {
+            lyric: lrc,
+          }
+        }
+      }
+    }
+  }
+
+  // 尝试读取同目录下的同名krc文件
+  lrcPath = path.replace(filePath, '.krc')
+  stats = await getFileStats(lrcPath)
+  if (stats && stats.size < 1024 * 1024 * 10) {
+    const lrcBuf = await readFile(lrcPath)
+    try {
+      return await decodeKrc(lrcBuf)
+    } catch (e) {
+      console.log(e)
+    }
+  }
+
   return null
 }

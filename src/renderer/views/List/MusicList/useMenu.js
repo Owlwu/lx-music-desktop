@@ -1,6 +1,7 @@
 import { computed, ref, shallowReactive, reactive, nextTick } from '@common/utils/vueTools'
 import { useI18n } from '@renderer/plugins/i18n'
 import { hasDislike } from '@renderer/core/dislikeList'
+import { checkPath } from '@common/utils/nodejs'
 
 export default ({
   emit,
@@ -12,12 +13,14 @@ export default ({
   handleShowSortModal,
   handleCopyName,
   handleOpenFolder,
+  handleMatchLyrics,
   handleDislikeMusic,
   handleRemoveMusic,
 }) => {
   const itemMenuControl = reactive({
     play: true,
     playLater: true,
+    matchLyrics: true,
     copyName: true,
     openFolder: true,
     addTo: true,
@@ -41,6 +44,11 @@ export default ({
         name: t('list__play_later'),
         action: 'playLater',
         disabled: !itemMenuControl.playLater,
+      },
+      {
+        name: t('list__match_lyrics'),
+        action: 'matchLyrics',
+        disabled: !itemMenuControl.matchLyrics,
       },
       {
         name: t('list__add_to'),
@@ -80,8 +88,11 @@ export default ({
     ]
   })
 
-  const showMenu = (event, musicInfo) => {
+  const showMenu = async(event, musicInfo) => {
     itemMenuControl.dislike = !hasDislike(musicInfo)
+    itemMenuControl.matchLyrics = musicInfo.source === 'local' &&
+      !!musicInfo.meta?.filePath &&
+      await checkPath(musicInfo.meta.filePath)
 
     menuLocation.x = event.pageX
     menuLocation.y = event.pageY
@@ -107,6 +118,9 @@ export default ({
         break
       case 'playLater':
         handlePlayMusicLater(index)
+        break
+      case 'matchLyrics':
+        handleMatchLyrics(index)
         break
       case 'copyName':
         handleCopyName(index)

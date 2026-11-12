@@ -10,6 +10,28 @@
     </div> -->
       <div :class="$style.group">
         <div :class="$style.subGroup">
+          <div :class="$style.title">{{ $t('lyric_menu__source') }}</div>
+          <button
+            :class="[$style.btn, { [$style.active]: sourceInfo.actual == 'embedded' }]"
+            :disabled="!sourceInfo.hasEmbedded" ignore-tip :aria-label="$t('lyric_menu__source_embedded')"
+            @click="setLyricSource('embedded')"
+          >{{ $t('lyric_menu__source_embedded') }}</button>
+          <button
+            :class="[$style.btn, { [$style.active]: sourceInfo.actual == 'lrc' }]"
+            :disabled="!sourceInfo.hasLrc" ignore-tip :aria-label="$t('lyric_menu__source_lrc')"
+            @click="setLyricSource('lrc')"
+          >{{ $t('lyric_menu__source_lrc') }}</button>
+        </div>
+        <div :class="$style.subGroup">
+          <div :class="$style.title">{{ $t('lyric_menu__source_actual', { source: sourceInfo.actual ? $t('lyric_menu__source_' + sourceInfo.actual) : $t('lyric_menu__source_none') }) }}</div>
+        </div>
+        <div :class="$style.subGroup">
+          <button :class="$style.btn" ignore-tip :aria-label="$t('lyric_menu__match')" @click="handleShowMatch">{{ $t('lyric_menu__match') }}</button>
+          <button :class="$style.btn" :disabled="!sourceInfo.hasBackup" ignore-tip :aria-label="$t('lyric_menu__restore')" @click="handleRestore">{{ $t('lyric_menu__restore') }}</button>
+        </div>
+      </div>
+      <div :class="$style.group">
+        <div :class="$style.subGroup">
           <div :class="$style.title">{{ $t('lyric_menu__lrc_size', { size: appSetting['playDetail.style.fontSize'] }) }}</div>
           <button :class="[$style.btn, $style.titleBtn]" :disabled="appSetting['playDetail.style.fontSize'] == 100" ignore-tip :aria-label="$t('lyric_menu__size_reset')" @click="fontSizeReset">{{ $t('lyric_menu__size_reset') }}</button>
         </div>
@@ -41,14 +63,20 @@
         </div>
       </div>
     </div>
+    <common-lyrics-match-modal v-model:show="isShowLyricsMatch" :music-info="matchMusicInfo" @applied="handleMatchApplied" />
   </teleport>
 </template>
 
 <script>
-import { computed, ref, watch } from '@common/utils/vueTools'
+import { computed, reactive, ref, watch } from '@common/utils/vueTools'
 import useMenuLocation from '@renderer/utils/compositions/useMenuLocation'
 import { debounce } from '@common/utils/common'
-import { saveLyricEdited, removeLyricEdited } from '@renderer/utils/ipc'
+import { mediaMatchGetLrcState, mediaMatchRollbackLrc, saveLyricEdited, removeLyricEdited } from '@renderer/utils/ipc'
+import { getMediaMatchErrorCode, getMediaMatchErrorKey } from '@renderer/utils/mediaMatch'
+import { getFileLyricSourceInfo, refreshPlayLyric, setMusicLyricSource } from '@renderer/core/music/lyricSource'
+import { dialog } from '@renderer/plugins/Dialog'
+import { playMusicInfo } from '@renderer/store/player/state'
+import useLyricsMatch from '@renderer/views/List/MusicList/useLyricsMatch'
 import { appSetting, setPlayDetailLyricFont, setPlayDetailLyricAlign } from '@renderer/store/setting'
 
 const offsetTagRxp = /(?:^|\n)\s*\[offset:\s*(\S+(?:\d+)*)\s*\]/
@@ -172,6 +200,89 @@ export default {
       offsetDisabled.value = !props.lyricInfo.lyric
     }
 
+    const getCurrentMusicInfo = () => {
+      const musicInfo = props.lyricInfo.musicInfo
+      if (!musicInfo) return null
+      return 'progress' in musicInfo ? musicInfo.metadata.musicInfo : musicInfo
+    }
+
+    const sourceInfo = reactive({
+      preferred: 'embedded',
+      actual: null,
+      hasEmbedded: false,
+      hasLrc: false,
+      hasBackup: false,
+    })
+
+    const {
+      isShowLyricsMatch,
+      matchMusicInfo,
+      openLyricsMatch,
+      handleLyricsMatchApplied,
+    } = useLyricsMatch()
+
+    const loadSourceInfo = async() => {
+      const musicInfo = getCurrentMusicInfo()
+      if (!musicInfo?.meta?.filePath) return
+      try {
+        const [sourceState, lrcState] = await Promise.all([
+          getFileLyricSourceInfo(musicInfo),
+          mediaMatchGetLrcState(musicInfo.meta.filePath),
+        ])
+        sourceInfo.preferred = sourceState.preferred
+        sourceInfo.actual = sourceState.actual
+        sourceInfo.hasEmbedded = sourceState.hasEmbedded
+        sourceInfo.hasLrc = sourceState.hasLrc
+        sourceInfo.hasBackup = lrcState.backupExists
+      } catch (err) {
+        console.log(err)
+      }
+    }
+
+    const setLyricSource = async source => {
+      const musicInfo = getCurrentMusicInfo()
+      if (!musicInfo || source == sourceInfo.actual) return
+      if (source == 'embedded' && !sourceInfo.hasEmbedded) return
+      if (source == 'lrc' && !sourceInfo.hasLrc) return
+      await setMusicLyricSource(musicInfo, source, playMusicInfo.listId)
+      await refreshPlayLyric(musicInfo)
+      await loadSourceInfo()
+    }
+
+    const handleShowMatch = () => {
+      const musicInfo = getCurrentMusicInfo()
+      if (!musicInfo) return
+      openLyricsMatch(musicInfo, playMusicInfo.listId)
+    }
+
+    const handleMatchApplied = async applied => {
+      await handleLyricsMatchApplied(applied)
+      await loadSourceInfo()
+    }
+
+    const handleRestore = async() => {
+      const musicInfo = getCurrentMusicInfo()
+      if (!musicInfo) return
+      const confirm = await dialog.confirm({
+        message: window.i18n.t('lyric_menu__restore_confirm'),
+        confirmButtonText: window.i18n.t('btn_confirm'),
+        cancelButtonText: window.i18n.t('btn_cancel'),
+      })
+      if (!confirm) return
+      try {
+        const result = await mediaMatchRollbackLrc(musicInfo.meta.filePath)
+        if (!result.restored) {
+          await dialog({ message: window.i18n.t('lyric_menu__restore_none') })
+          return
+        }
+        await setMusicLyricSource(musicInfo, sourceInfo.hasEmbedded ? 'embedded' : 'lrc', playMusicInfo.listId)
+        await refreshPlayLyric(musicInfo)
+        await loadSourceInfo()
+      } catch (err) {
+        console.log(err)
+        await dialog({ message: window.i18n.t(getMediaMatchErrorKey(getMediaMatchErrorCode(err))) })
+      }
+    }
 
     const { dom_menu, menuStyles } = useMenuLocation({
       visible,
@@ -182,10 +293,12 @@ export default {
     watch(() => props.lyricInfo.musicInfo, () => {
       if (!props.modelValue) return
       parseLrcOffset()
+      void loadSourceInfo()
     })
     watch(visible, val => {
       if (!val) return
       parseLrcOffset()
+      void loadSourceInfo()
     })
 
     return {
@@ -201,6 +314,13 @@ export default {
       offsetReset,
       setFontAlign,
       offsetDisabled,
+      sourceInfo,
+      setLyricSource,
+      handleShowMatch,
+      handleRestore,
+      isShowLyricsMatch,
+      matchMusicInfo,
+      handleMatchApplied,
     }
   },
 }

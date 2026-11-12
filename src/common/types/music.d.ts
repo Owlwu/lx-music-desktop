@@ -6,6 +6,7 @@ declare namespace LX {
       picUrl?: string | null // 歌曲图片（内嵌封面缓存/匹配结果）
       filePath: string
       ext: string
+      lyricSource?: LX.MediaMatch.LyricSource // 单曲歌词来源偏好
     }
 
     interface MusicInfo {

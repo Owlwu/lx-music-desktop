@@ -96,6 +96,7 @@
     />
     <search-list :list="list" :visible="isShowSearchBar" @action="handleMusicSearchAction" />
     <music-sort-modal v-model:show="isShowMusicSortModal" :music-info="selectedSortMusicInfo" :selected-num="selectedNum" @confirm="sortMusic" />
+    <common-lyrics-match-modal v-model:show="isShowLyricsMatch" :music-info="matchMusicInfo" @applied="handleLyricsMatchApplied" />
     <base-menu v-model="isShowItemMenu" :menus="menus" :xy="menuLocation" item-name="name" @menu-click="handleMenuClick" />
   </div>
 </template>
@@ -111,6 +112,7 @@ import usePlay from './usePlay'
 import useMusicAdd from './useMusicAdd'
 import useSort from './useSort'
 import useMusicActions from './useMusicActions'
+import useLyricsMatch from './useLyricsMatch'
 import useSearch from './useSearch'
 import useListScroll from './useListScroll'
 import { appSetting } from '@renderer/store/setting'
@@ -187,11 +189,19 @@ export default {
     } = useSort({ props, list, selectedList, removeAllSelect })
 
     const {
+      isShowLyricsMatch,
+      matchMusicInfo,
+      openLyricsMatch,
+      handleLyricsMatchApplied,
+    } = useLyricsMatch()
+
+    const {
       handleCopyName,
       handleOpenFolder,
+      handleMatchLyrics,
       handleDislikeMusic,
       handleRemoveMusic,
-    } = useMusicActions({ props, list, removeAllSelect, selectedList })
+    } = useMusicActions({ props, list, removeAllSelect, selectedList, openLyricsMatch })
 
     const {
       menus,
@@ -209,6 +219,7 @@ export default {
       handleShowSortModal,
       handleCopyName,
       handleOpenFolder,
+      handleMatchLyrics,
       handleDislikeMusic,
       handleRemoveMusic,
     })
@@ -233,7 +244,7 @@ export default {
     }
     const handleListItemRightClick = (event, index) => {
       rightClickSelectedIndex.value = index
-      showMenu(event, list.value[index], index)
+      void showMenu(event, list.value[index], index)
     }
     const handleMenuClick = (action) => {
       let index = rightClickSelectedIndex.value
@@ -297,6 +308,10 @@ export default {
       selectedNum,
       selectedSortMusicInfo,
       sortMusic,
+
+      isShowLyricsMatch,
+      matchMusicInfo,
+      handleLyricsMatchApplied,
 
       scrollToTop,
 
