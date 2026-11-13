@@ -3,7 +3,7 @@ const isMac = process.platform == 'darwin'
 const isWin = process.platform == 'win32'
 
 const defaultSetting: LX.AppSetting = {
-  version: '2.1.0',
+  version: '2.1.1',
 
   'common.windowSizeId': 3,
   'common.fontSize': 16,
@@ -29,7 +29,7 @@ const defaultSetting: LX.AppSetting = {
   'player.isMaxOutputChannelCount': false,
   'player.mediaDeviceId': 'default',
   'player.isMediaDeviceRemovedStopPlay': false,
-  'player.isShowLyricTranslation': false,
+  'player.isShowLyricTranslation': true,
   'player.isShowLyricRoma': false,
   'player.isSwapLyricTranslationAndRoma': false,
   'player.isS2t': false,

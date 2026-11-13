@@ -123,6 +123,12 @@ export default (setting: any): Partial<LX.AppSetting> => {
     setting.version = '2.1.0'
   }
 
+  // 迁移 v2.1.1 之前的设置数据：本 fork 默认打开歌词翻译（罗马音保持关闭）
+  if (compareVer(setting.version, '2.1.1') < 0) {
+    setting['player.isShowLyricTranslation'] = true
+    setting.version = '2.1.1'
+  }
+
 
   return setting
 }

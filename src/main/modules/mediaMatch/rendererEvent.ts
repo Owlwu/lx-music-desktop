@@ -1,6 +1,6 @@
 import { MEDIA_MATCH_EVENT_NAME } from '@common/ipcNames'
 import { mainHandle } from '@common/mainIpc'
-import { buildLrcText } from '@common/utils/mediaMatch/lrcText'
+import { buildExtendedLrcText, buildLrcText, sanitizeExtendedLyric } from '@common/utils/mediaMatch/lrcText'
 import { buildAwlrcLrcText } from '@common/utils/mediaMatch/qrcLyric'
 import { checkPath } from '@common/utils/nodejs'
 import { log } from '@common/utils'
@@ -33,7 +33,7 @@ const assertFileExist = async(filePath: string): Promise<void> => {
 }
 
 const assertCandidate = (candidate: LX.MediaMatch.LyricsCandidate | null | undefined): LX.MediaMatch.LyricsCandidate => {
-  if (!candidate?.id || (candidate.source !== 'lrclib' && candidate.source !== 'qq')) {
+  if (!candidate?.id || (candidate.source !== 'lrclib' && candidate.source !== 'qq' && candidate.source !== 'netease')) {
     throw mediaMatchError('invalid_candidate')
   }
   return candidate
@@ -44,6 +44,7 @@ const applyLyricFile = async(
   candidate: LX.MediaMatch.LyricsCandidate,
 ): Promise<LX.MediaMatch.ApplyResult> => {
   // QQ 候选先尝试逐字：成功且可用 → 正文用 QRC 转出的行级歌词，并追加 [awlrc:]
+  // 逐字路径不合并翻译/罗马音：QRC 时间轴与第三方行级翻译可能错位，保持二期行为不变。
   const wordSync = candidate.source === 'qq' ? await getCandidateWordSync(candidate) : null
   if (wordSync?.lyric.trim() && wordSync.lxlyric.trim()) {
     const body = buildLrcText({
@@ -75,9 +76,19 @@ const applyLyricFile = async(
   })
   if (!text) throw mediaMatchError('no_lyric')
 
+  // 普通路径：翻译/罗马音行级扩展段与正文同一份 `.lrc`；无扩展数据时输出与旧版逐字节一致
+  const tlyric = sanitizeExtendedLyric(lyricResult.tlyric)
+  const rlyric = sanitizeExtendedLyric(lyricResult.rlyric)
+  const extendedText = buildExtendedLrcText(text, { tlyric, rlyric })
+
   try {
-    const result = await applyLrc(musicInfo.meta.filePath, text)
-    return { ...result, hasWordSync: false }
+    const result = await applyLrc(musicInfo.meta.filePath, extendedText)
+    return {
+      ...result,
+      hasWordSync: false,
+      hasTranslation: !!tlyric,
+      hasRomaji: !!rlyric,
+    }
   } catch (err) {
     throw toIpcError(err, lrcFileErrorPrefix)
   }

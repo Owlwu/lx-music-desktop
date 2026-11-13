@@ -31,12 +31,18 @@ material-modal(:show="show" max-width="78%" min-width="560px" @close="handleClos
               span {{ formatDuration(item.durationSec) }}
             div(:class="$style.candidateScore") {{ Math.round(item.score * 100) + '%' }}
       div(:class="$style.previewPanel")
-        div(:class="$style.previewTitle") {{ $t('lyrics_match__preview') }}
+        div(:class="$style.previewTitle")
+          span {{ $t('lyrics_match__preview') }}
+          span(v-if="hasTranslation" :class="[$style.tag, $style.previewTag]") {{ $t('lyrics_match__translation_available') }}
+          span(v-if="hasRoma" :class="[$style.tag, $style.previewTag]") {{ $t('lyrics_match__roma_available') }}
         div(v-if="previewLoading" :class="$style.empty") {{ $t('lyrics_match__loading_lyric') }}
         div(v-else-if="previewError" :class="$style.empty") {{ previewError }}
-        div(v-else-if="!previewLines.length" :class="$style.empty") {{ $t('lyrics_match__preview_empty') }}
+        div(v-else-if="!previewEntries.length" :class="$style.empty") {{ $t('lyrics_match__preview_empty') }}
         div(v-else :class="['scroll', $style.previewContent]")
-          p(v-for="(line, index) in previewLines" :key="index" :class="$style.previewLine") {{ line || ' ' }}
+          p(
+            v-for="(entry, index) in previewEntries" :key="index"
+            :class="[$style.previewLine, { [$style.previewLineExtended]: entry.type !== 'main' }]"
+          ) {{ entry.text || ' ' }}
     div(v-if="noticeText" :class="$style.notice") {{ noticeText }}
     div(:class="$style.footer")
       div(:class="$style.tip") {{ tipText }}
@@ -49,6 +55,7 @@ material-modal(:show="show" max-width="78%" min-width="560px" @close="handleClos
 import { dialog } from '@renderer/plugins/Dialog'
 import { mediaMatchApplyLrc, mediaMatchGetLyric, mediaMatchGetWordSync, mediaMatchSearch } from '@renderer/utils/ipc'
 import { getMediaMatchErrorCode, getMediaMatchErrorKey } from '@renderer/utils/mediaMatch'
+import { getLyricPreviewEntries } from '@common/utils/mediaMatch/lrcText'
 import { hasInstrumentalMark } from '@common/utils/mediaMatch/normalize'
 
 const maxPreviewLines = 30
@@ -75,6 +82,8 @@ export default {
       preview: {
         lyric: '',
         isSynced: false,
+        tlyric: '',
+        rlyric: '',
       },
       previewLoading: false,
       previewError: '',
@@ -89,22 +98,14 @@ export default {
     }
   },
   computed: {
-    previewLines() {
-      if (!this.preview.lyric) return []
-      const lines = this.preview.lyric.replace(/\r\n?/g, '\n').split('\n')
-      const result = []
-      for (const rawLine of lines) {
-        // 预览不展示源歌词自带的元信息行/词级标签
-        let line = rawLine.replace(/<[\d:.,]+>/g, '').trimEnd()
-        if (/^\s*\[(?:ti|ar|al|by):[^\]]*]\s*$/i.test(line)) continue
-        if (!line) {
-          if (result.length && result[result.length - 1] !== '') result.push('')
-          continue
-        }
-        result.push(line)
-        if (result.length >= maxPreviewLines) break
-      }
-      return result
+    previewEntries() {
+      return getLyricPreviewEntries(this.preview.lyric, this.preview.tlyric, this.preview.rlyric, maxPreviewLines)
+    },
+    hasTranslation() {
+      return !!this.preview.tlyric
+    },
+    hasRoma() {
+      return !!this.preview.rlyric
     },
     canApply() {
       return !!this.getSelectedCandidate() && !!this.preview.lyric && !this.previewLoading
@@ -134,7 +135,7 @@ export default {
       this.candidates = []
       this.errorText = ''
       this.selectedIndex = -1
-      this.preview = { lyric: '', isSynced: false }
+      this.preview = { lyric: '', isSynced: false, tlyric: '', rlyric: '' }
       this.previewLoading = false
       this.previewError = ''
       this.noticeText = ''
@@ -209,7 +210,7 @@ export default {
       this.loading = true
       this.errorText = ''
       this.selectedIndex = -1
-      this.preview = { lyric: '', isSynced: false }
+      this.preview = { lyric: '', isSynced: false, tlyric: '', rlyric: '' }
       this.previewLoading = false
       this.previewError = ''
       this.noticeText = ''
@@ -294,7 +295,7 @@ export default {
       const candidate = this.candidates[index]
       if (!candidate) return
       this.selectedIndex = index
-      this.preview = { lyric: '', isSynced: false }
+      this.preview = { lyric: '', isSynced: false, tlyric: '', rlyric: '' }
       this.previewError = ''
       this.noticeText = ''
       this.wordSync = null
@@ -544,10 +545,19 @@ export default {
 
 .previewTitle {
   flex: none;
+  display: flex;
+  flex-flow: row nowrap;
+  align-items: center;
+  gap: 6px;
   font-size: 12px;
   color: var(--color-font-label);
   padding: 8px 10px;
   border-bottom: 1px solid var(--color-primary-light-300-alpha-600);
+}
+
+.previewTag {
+  color: var(--color-primary);
+  border-color: var(--color-primary-alpha-500);
 }
 
 .previewLine {
@@ -557,6 +567,11 @@ export default {
   padding: 0 10px;
   word-break: break-word;
   min-height: 1.2em;
+}
+
+.previewLineExtended {
+  font-size: 11px;
+  color: var(--color-font-label);
 }
 
 .empty {

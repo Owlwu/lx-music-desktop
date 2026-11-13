@@ -15,6 +15,7 @@
  *  - 行级正文 = 同一行去掉词级标签；无词级标签的行只进行级，不进 lxlyric；
  *  - 空文本 token、空白行丢弃；不自行插入间奏空行；[offset:] 两份都保留。
  */
+import { buildExtendedLrcText } from './lrcText'
 export interface QrcLyricResult {
   /**
    * 行级 LRC：`[mm:ss.xxx]正文`
@@ -151,10 +152,8 @@ export const isUsableWordSync = (result: QrcLyricResult): boolean => {
 /**
  * 拼最终 `.lrc` 文本：正文 + 空行 + `[awlrc:lrc:<b64>,awlrc:<b64-lxlyric>]` + 结尾换行。
  * 标签必须独占一行；`lrc:` 段会覆盖正文，因此两段必须来自同一份文本。
+ * 现为 `buildExtendedLrcText` 的薄封装：翻译/罗马音扩展段由同一条拼装逻辑处理。
  */
 export const buildAwlrcLrcText = (body: string, lxlyric: string): string => {
-  const text = (body ?? '').replace(/\r\n?/g, '\n').trim()
-  const wordLyric = (lxlyric ?? '').replace(/\r\n?/g, '\n').trim()
-  const encode = (value: string): string => Buffer.from(value, 'utf8').toString('base64')
-  return `${text}\n\n[awlrc:lrc:${encode(text)},awlrc:${encode(wordLyric)}]\n`
+  return buildExtendedLrcText(body, { lxlyric })
 }

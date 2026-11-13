@@ -3,9 +3,10 @@ import { createKeywordQuery, createMatchQuery } from '@common/utils/mediaMatch/q
 import { rankCandidates } from '@common/utils/mediaMatch/score'
 import lrclib from './providers/lrclib'
 import qq, { getWordSync as getQqWordSync } from './providers/qq'
+import netease from './providers/netease'
 
-// 源启用顺序固定：lrclib -> qq；单源失败自动跳过
-const providers: LX.MediaMatch.LyricsProvider[] = [lrclib, qq]
+// 源启用顺序固定：lrclib -> qq -> netease（netease 额外提供翻译/罗马音）；单源失败自动跳过
+const providers: LX.MediaMatch.LyricsProvider[] = [lrclib, qq, netease]
 
 export const createQuery = (
   musicInfo: LX.Music.MusicInfo,

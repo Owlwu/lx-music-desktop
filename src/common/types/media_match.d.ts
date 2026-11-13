@@ -8,7 +8,7 @@ declare namespace LX {
     /**
      * 在线歌词数据源 id
      */
-    type LyricsSource = 'lrclib' | 'qq'
+    type LyricsSource = 'lrclib' | 'qq' | 'netease'
 
     interface MatchQuery {
       name: string
@@ -52,6 +52,14 @@ declare namespace LX {
     interface LyricResult {
       lyric: string
       isSynced: boolean
+      /**
+       * 行级中文翻译（清洗后的 `[mm:ss]正文` 行；空串/未提供 = 无翻译）
+       */
+      tlyric?: string | null
+      /**
+       * 行级罗马音（清洗后的 `[mm:ss]正文` 行；空串/未提供 = 无罗马音）
+       */
+      rlyric?: string | null
     }
 
     /**
@@ -106,6 +114,14 @@ declare namespace LX {
        * 本次是否写入了逐字数据（`[awlrc:]`）
        */
       hasWordSync: boolean
+      /**
+       * 本次是否写入了翻译段（`tlrc:`）
+       */
+      hasTranslation?: boolean
+      /**
+       * 本次是否写入了罗马音段（`rlrc:`）
+       */
+      hasRomaji?: boolean
     }
 
     interface FilePathParams {
