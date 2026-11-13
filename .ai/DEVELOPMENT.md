@@ -119,6 +119,10 @@ Node `>= 22` 可直接剥离 TS 类型运行：
 ```
 node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON tests/music-file-sync.test.ts   # diff/plan 规则
 node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON tests/music-file-fs.test.ts     # 扫描/分块传输/删除（真实临时目录）
+node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON tests/media-match.test.ts       # 在线歌词匹配（含网易云 provider/翻译扩展段）
+node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON tests/lyrics-translation.test.ts # 翻译/罗马音扩展段 + 迁移
+node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON tests/word-sync.test.ts         # QRC 逐字
+node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON tests/cover-match.test.ts       # 封面匹配
 ```
 
 `tests/music-file-fs.test.ts` 还会断言移动端

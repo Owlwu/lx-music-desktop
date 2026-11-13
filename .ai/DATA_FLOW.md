@@ -86,24 +86,27 @@ sendPlayerStatus(partial) → IPC `player_status` → main 更新 global.lx.play
   → IPC media_match_search { musicInfo, keyword? }
       → main/modules/mediaMatch/rendererEvent.ts → matcher.ts
           ├─ providers/lrclib.ts（结构化 → q= 回退；进程内 LRU 缓存搜索内联歌词）
-          └─ providers/qq.ts（client_search_cp 搜索；取词时才请求 fcg_query_lyric_new，必须 Referer）
+          ├─ providers/qq.ts（client_search_cp 搜索；取词时才请求 fcg_query_lyric_new，必须 Referer）
+          └─ providers/netease.ts（网易云搜索；取词时 lrc + tlyric + romalrc/yromalrc，行级翻译/罗马音）
       → 聚合 → common/utils/mediaMatch/score.ts 打分 → 去重 → 排序（≤30）
-  → 选中候选 → IPC media_match_get_lyric { candidate }（QQ 无歌词时前端自动试下 1–2 个候选）
+  → 选中候选 → IPC media_match_get_lyric { candidate }（QQ 无歌词时前端自动试下 1–2 个候选；netease 结果带 tlyric/rlyric）
   → QQ 候选并行 IPC media_match_get_word_sync { candidate }
       → providers/qq.getWordSync POST musicu.fcg（qrc:1 + crypt:1）→ qrc.js decodeQrc → qrcLyric.parseQrcLyric
       → 返回 { lyric, lxlyric }；失败返回 null（静默降级行级）
   → 应用 → IPC media_match_apply_lrc
-      → 有逐字：正文 = QRC 行级歌词（+本地头部）+ buildAwlrcLrcText 的 [awlrc:lrc,awlrc]；
-        无逐字：走一期 buildLrcText
+      → 有逐字：正文 = QRC 行级歌词（+本地头部）+ buildAwlrcLrcText 的 [awlrc:lrc,awlrc]（不合并翻译）
+        无逐字：走一期 buildLrcText；netease 候选再经 buildExtendedLrcText 写
+                [awlrc:lrc,<tlrc> ,<rlrc>]（无翻译/罗马音时输出与旧版一致）
       → main lrcFile.applyLrc()：同名 .lrc 已存在且无 .bak 先备份 → 写 .tmp → rename
-      → 返回 { lrcPath, backupCreated, hasWordSync }；失败自动恢复备份并返回错误码
+      → 返回 { lrcPath, backupCreated, hasWordSync, hasTranslation?, hasRomaji? }；失败自动恢复备份并返回错误码
   → 渲染：meta.lyricSource='lrc' → updateListMusics 持久化 → 若为当前歌曲 refreshPlayLyric()
 ```
 
 - 回退：歌词菜单「恢复原始 LRC」→ `media_match_rollback_lrc`（删除当前 `.lrc`，`.lrc.bak` 改回）。
 - 来源切换：歌词菜单单选写入 `meta.lyricSource`，不写文件；菜单展示实际生效来源。
 - 逐字：`[awlrc:]` 由桌面 `worker/main/music.ts parseLyric` 解析出 `lxlyric`，`player.isPlayLxlrc` 开启时逐字渲染；
-  移动端会剥掉标签、退化为行级。
+  同一标签里的 `tlrc:`/`rlrc:` 会解析为翻译/罗马音，播放页按「显示歌词翻译/罗马音」设置渲染（翻译默认开、罗马音默认关）；
+  移动端同样兼容这些段。
 - 约束：绝不改音频、不写封面；所有路径由主进程校验；日志不打印歌词正文/密文。
 
 ## 3.2 在线封面匹配（外挂同名图片）

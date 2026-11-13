@@ -18,7 +18,7 @@
 | **tray** | `tray.ts` | 托盘图标/菜单（播放控制、显示、退出） |
 | **appMenu** | `appMenu.ts` | 应用菜单栏 |
 | **sync** | `sync/` | 跨端同步：`server/`（主机）+ `client/`（连接）+ `musicFile/`（本地音乐文件同步） |
-| **mediaMatch** | `mediaMatch/` | 在线歌词匹配：`index.ts` 注册、`rendererEvent.ts` IPC、`matcher.ts` 编排、`providers/{lrclib,qq}.ts`、`lrcFile.ts` 文件规则；QQ 候选支持 QRC 逐字（`[awlrc:]`） |
+| **mediaMatch** | `mediaMatch/` | 在线歌词匹配：`index.ts` 注册、`rendererEvent.ts` IPC、`matcher.ts` 编排、`providers/{lrclib,qq,netease}.ts`、`lrcFile.ts` 文件规则；QQ 候选支持 QRC 逐字（`[awlrc:]`），netease 候选带行级翻译/罗马音（`tlrc:`/`rlrc:`） |
 | **coverMatch** | `coverMatch/` | 在线封面匹配：`index.ts` 注册、`rendererEvent.ts` IPC、`matcher.ts` 编排/下载、`providers/{qq,itunes}.ts`、`coverFile.ts` 同名图规则 |
 
 ### winMain 内部

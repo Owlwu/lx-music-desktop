@@ -119,17 +119,19 @@ togglePlay/pause/stop/collectMusic/uncollectMusic/dislikeMusic/setMusicUrl`）�
 
 ## 6. 在线歌词匹配（`src/main/modules/mediaMatch/`）
 
-按歌曲信息向 LRCLIB / QQ 音乐查询候选，用户确认后由主进程写成音频同目录同名 `.lrc`；
+按歌曲信息向 LRCLIB / QQ 音乐 / 网易云音乐查询候选，用户确认后由主进程写成音频同目录同名 `.lrc`；
 渲染进程只做 UI 与列表 `meta.lyricSource` 更新，**不直接写文件**。
+网易云源额外提供行级中文翻译（`tlyric`）与罗马音（`romalrc`），应用时写入 `.lrc` 扩展段
+`[awlrc:lrc:<b64>,tlrc:<b64>,rlrc:<b64>]`（无翻译/罗马音时不写，输出与旧版一致）。
 
 ### IPC（`MEDIA_MATCH_EVENT_NAME`，事件名 `media_match_*`）
 
 | 事件 | 参数 | 返回 |
 | --- | --- | --- |
 | `media_match_search` | `{ musicInfo, keyword? }` | `{ candidates: LX.MediaMatch.LyricsCandidate[] }` |
-| `media_match_get_lyric` | `{ candidate }` | `{ lyric, isSynced } \| null` |
+| `media_match_get_lyric` | `{ candidate }` | `{ lyric, isSynced, tlyric?, rlyric? } \| null` |
 | `media_match_get_word_sync` | `{ candidate }` | `{ lyric, lxlyric } \| null`（仅 QQ QRC；失败返回 null） |
-| `media_match_apply_lrc` | `{ musicInfo, candidate }` | `{ lrcPath, backupCreated, hasWordSync }` |
+| `media_match_apply_lrc` | `{ musicInfo, candidate }` | `{ lrcPath, backupCreated, hasWordSync, hasTranslation?, hasRomaji? }` |
 | `media_match_rollback_lrc` | `{ filePath }`（音频路径） | `{ restored }` |
 | `media_match_get_lrc_state` | `{ filePath }`（音频路径） | `LrcState` |
 
@@ -145,9 +147,16 @@ togglePlay/pause/stop/collectMusic/uncollectMusic/dislikeMusic/setMusicUrl`）�
   UA、串行 ≥260ms、10s 超时、2MB 上限、429/503 `Retry-After` + 抖动退避（≤2 次）。
 - `providers/qq.ts`：`client_search_cp` 搜索 + `fcg_query_lyric_new.fcg` 取词（`nobase64=1`，**必须**带
   `Referer: https://y.qq.com/`）；业务码 `-1310/-1901/1101` 记 debug 并降级；不发送任何登录 Cookie。
-- `matcher.ts`：`lrclib -> qq` 两源并发（≤2）、`allSettled` 降级、聚合 → 打分 → 去重 → 排序（≤30）。
+- `providers/netease.ts`：第三方非官方、无 key。
+  - 搜索 `GET https://music.163.com/api/search/get/web?csrf_token=&s=<kw>&type=1&offset=0&limit=10`；
+  - 取词 `GET https://music.163.com/api/song/lyric?id=<id>&lv=-1&kv=-1&tv=-1&rv=-1`；
+  - `tlyric.lyric` → 中文翻译、`romalrc.lyric`（回退 `yromalrc`）→ 罗马音，均做行级清洗（只留时间轴行，去 `//`/元信息）；
+  - 必须带桌面 UA + `Referer: https://music.163.com/`，不发送 Cookie；串行 ≥300ms、10s 超时、4MB 上限；
+    业务 `code!==200` / `nolyric` / `uncollected` / 无主歌词 → 降级；日志只记 source/cost/count/code。
+- `matcher.ts`：`lrclib -> qq -> netease` 三源并发（≤2）、`allSettled` 降级、聚合 → 打分 → 去重 → 排序（≤30）。
 - 纯逻辑在 `src/common/utils/mediaMatch/`：`normalize`（全角/清洗/伴奏标记）、`score`（0.5/0.3/0.2 + 伴奏减半）、
-  `query`（查询变体）、`lrcText`（LRC 生成 + 取词有效性校验）、`source`（内嵌/LRC 来源回退）、`qqParse`（QQ 响应解析）、
+  `query`（查询变体）、`lrcText`（LRC 生成 + 取词有效性校验 + `sanitizeExtendedLyric` / `buildExtendedLrcText` /
+  `getLyricPreviewEntries`）、`source`（内嵌/LRC 来源回退）、`qqParse`（QQ 响应解析）、
   `qrcLyric`（QRC → 行级 LRC + lxlyric，见下）。
 - 逐字（QQ QRC）：`providers/qq.getWordSync` POST `https://u.y.qq.com/cgi-bin/musicu.fcg`
   （`music.musichallSong.PlayLyricInfo / GetPlayLyricInfo`，`qrc:1` + `crypt:1` 必须同时给；外层 `code` 与 `req.code` 两级判定）。
