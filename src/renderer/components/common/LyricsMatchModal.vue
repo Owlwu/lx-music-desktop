@@ -1,5 +1,5 @@
 <template lang="pug">
-material-modal(:show="show" max-width="78%" min-width="560px" @close="handleClose" @after-enter="focusInput")
+material-modal(:show="show" width="860px" max-width="90%" min-width="560px" height="70vh" @close="handleClose" @after-enter="focusInput")
   main(:class="$style.main")
     h2(:class="$style.title") {{ $t('lyrics_match__title') }}
     div(:class="$style.searchBar")
@@ -403,8 +403,8 @@ export default {
 .main {
   display: flex;
   flex-flow: column nowrap;
+  flex: 1 1 auto;
   min-height: 0;
-  max-height: 70vh;
   padding: 0 15px 15px;
   width: 100%;
   box-sizing: border-box;
@@ -455,9 +455,8 @@ export default {
 
 .candidateList,
 .previewContent {
-  flex: auto;
-  min-height: 200px;
-  max-height: 46vh;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
 }
 
