@@ -9,6 +9,8 @@ dd
     base-checkbox(id="setting_list_scroll_enable" :model-value="appSetting['list.isSaveScrollLocation']" :label="$t('setting__list_scroll')" @update:model-value="updateSetting({'list.isSaveScrollLocation': $event})")
   .gap-top
     base-checkbox(id="setting_list_clickAction_enable" :model-value="appSetting['list.isClickPlayList']" :label="$t('setting__list_click_action')" @update:model-value="updateSetting({'list.isClickPlayList': $event})")
+  .gap-top
+    base-checkbox(id="setting_list_deleteLocalFileWhenRemove_enable" :model-value="appSetting['list.isDeleteLocalFileWhenRemove']" :label="$t('setting__list_delete_local_file_when_remove')" @update:model-value="updateSetting({'list.isDeleteLocalFileWhenRemove': $event})")
 dd(:aria-label="$t('setting__basic_sourcename_title')")
   h3#list_addMusicLocationType {{ $t('setting__list_add_music_location_type') }}
   div

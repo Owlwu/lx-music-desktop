@@ -102,6 +102,7 @@ const defaultSetting: LX.AppSetting = {
   'list.isSaveScrollLocation': true,
   'list.addMusicLocationType': 'top',
   'list.actionButtonsVisible': false,
+  'list.isDeleteLocalFileWhenRemove': false,
 
   'network.proxy.enable': false,
   'network.proxy.host': '',

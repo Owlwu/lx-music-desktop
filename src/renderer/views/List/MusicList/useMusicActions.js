@@ -8,6 +8,8 @@ import { playNext } from '@renderer/core/player'
 import { playMusicInfo } from '@renderer/store/player/state'
 import { openDirInExplorer } from '@renderer/utils/ipc'
 import { checkPath } from '@common/utils/nodejs'
+import { deleteLocalMusicFiles } from '@renderer/utils/localMusicFile'
+import { appSetting } from '@renderer/store/setting'
 
 
 export default ({ props, list, selectedList, removeAllSelect, openLyricsMatch, openCoverMatch }) => {
@@ -52,20 +54,46 @@ export default ({ props, list, selectedList, removeAllSelect, openLyricsMatch, o
     }
   }
 
+  // 开启「从列表移除本地歌曲时同时删除本地文件」后，移除本地歌曲时一并删除音频、歌词与同名封面；
+  // 删除放到后台执行，避免网络盘/被占用文件拖慢列表刷新
+  const handleDeleteLocalFiles = async(musicInfos) => {
+    if (!appSetting['list.isDeleteLocalFileWhenRemove']) return
+    for (const musicInfo of musicInfos) {
+      if (!musicInfo || musicInfo.source !== 'local') continue
+      await deleteLocalMusicFiles(musicInfo).catch(() => {})
+    }
+  }
+
   const handleRemoveMusic = async(index, single) => {
+    const isDeleteLocalFile = appSetting['list.isDeleteLocalFileWhenRemove']
     if (selectedList.value.length && !single) {
-      const confirm = await (selectedList.value.length > 1
+      const musicInfos = [...selectedList.value]
+      const hasLocal = isDeleteLocalFile && musicInfos.some(m => m.source === 'local')
+      const confirm = await (musicInfos.length > 1 || hasLocal
         ? dialog.confirm({
-          message: t('lists__remove_music_tip', { len: selectedList.value.length }),
+          message: hasLocal
+            ? t('lists__remove_music_local_file_tip', { len: musicInfos.length })
+            : t('lists__remove_music_tip', { len: musicInfos.length }),
           confirmButtonText: t('lists__remove_tip_button'),
         })
         : Promise.resolve(true)
       )
       if (!confirm) return
-      removeListMusics({ listId: props.listId, ids: selectedList.value.map(m => m.id) })
+      handleDeleteLocalFiles(musicInfos).catch(() => {})
+      removeListMusics({ listId: props.listId, ids: musicInfos.map(m => m.id) })
       removeAllSelect()
     } else {
-      removeListMusics({ listId: props.listId, ids: [list.value[index].id] })
+      const minfo = list.value[index]
+      if (!minfo) return
+      if (isDeleteLocalFile && minfo.source === 'local') {
+        const confirm = await dialog.confirm({
+          message: t('lists__remove_local_file_tip', { name: minfo.name }),
+          confirmButtonText: t('lists__remove_tip_button'),
+        })
+        if (!confirm) return
+      }
+      handleDeleteLocalFiles([minfo]).catch(() => {})
+      removeListMusics({ listId: props.listId, ids: [minfo.id] })
     }
   }
 

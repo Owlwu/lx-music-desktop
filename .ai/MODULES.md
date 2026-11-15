@@ -57,7 +57,7 @@
 | `defaultSetting.ts` / `defaultHotKey.ts` | 设置/快捷键默认值（已剔除音源、搜索、下载、OpenAPI、自动更新键） |
 | `config.ts` | 窗口尺寸档位、白名单等 |
 | `constants_sync.ts` | 同步协议常量与 `FeaturesList`（`list` / `dislike` / `musicFile`） |
-| `utils/` | `common`、`nodejs`、`request`(undici)、`tools`、`electron`、`lyricUtils`（含 `kg.js` KRC、`qrc.js` QRC 解码）、`lyric-font-player`、`pinyin`、`migrateSetting`、`mediaMatch/`（纯逻辑：normalize/score/query/lrcText/source/qqParse/qrcLyric）、`coverMatch/`（纯逻辑：score） |
+| `utils/` | `common`、`nodejs`、`request`(undici)、`tools`、`electron`、`lyricUtils`（含 `kg.js` KRC、`qrc.js` QRC 解码）、`lyric-font-player`、`pinyin`、`migrateSetting`、`musicSidecar`（移除本地歌曲时同名歌词/封面路径推导，纯函数）、`mediaMatch/`（纯逻辑：normalize/score/query/lrcText/source/qqParse/qrcLyric）、`coverMatch/`（纯逻辑：score） |
 
 ## 4. 主窗口渲染进程 — `src/renderer/`
 
@@ -91,6 +91,7 @@
 ### components / plugins / worker
 | 路径 | 作用 |
 | --- | --- |
+| `utils/` | 渲染进程工具：`ipc`（IPC 门面）、`music`（本地文件元数据/歌词读取）、`localMusicFile`（移除本地歌曲时删除音频与同名歌词/封面，受设置 `list.isDeleteLocalFileWhenRemove` 控制）、`coverMatch`/`mediaMatch` 错误码映射 |
 | `components/layout/{Aside,Toolbar,PlayBar,PlayDetail}/` | 主框架：侧栏（导航 + 左上 logo/窗口按钮）、工具栏（**页面标题 + 右上角窗口按钮**）、播放栏、播放详情页 |
 | `components/layout/{PactModal,SyncModeModal,SyncAuthCodeModal,Icons,View}.vue` | 协议弹窗、同步弹窗、图标 sprite、路由出口 |
 | `components/base/` | 基础控件：`Btn Checkbox Input Menu MusicList Popup Selection SliderBar Tab VirtualizedList` |

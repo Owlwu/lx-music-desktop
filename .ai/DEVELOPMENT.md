@@ -123,6 +123,7 @@ node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON tests/media-match.test.ts   
 node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON tests/lyrics-translation.test.ts # 翻译/罗马音扩展段 + 迁移
 node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON tests/word-sync.test.ts         # QRC 逐字
 node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON tests/cover-match.test.ts       # 封面匹配
+node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON tests/local-music-remove.test.ts # 移除本地歌曲连带清理歌词/封面（路径 + 删除接线 + 设置接线）
 ```
 
 `tests/music-file-fs.test.ts` 还会断言移动端

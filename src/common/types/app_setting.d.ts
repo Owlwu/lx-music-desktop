@@ -478,6 +478,11 @@ declare global {
        */
       'list.actionButtonsVisible': boolean
 
+      /**
+       * 从列表移除本地歌曲时，是否同时删除本地文件、歌词（含 .bak）与同名封面（含 .bak）
+       */
+      'list.isDeleteLocalFileWhenRemove': boolean
+
 
       /**
        * 主题id
