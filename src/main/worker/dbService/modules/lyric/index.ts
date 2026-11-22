@@ -59,9 +59,11 @@ export const getPlayerLyric = (id: string): LX.Player.LyricInfo => {
   return lyricInfo.lyric ? {
     ...lyricInfo,
     rawlrcInfo: rawLyricInfo,
+    isEdited: true,
   } : {
     ...rawLyricInfo,
     rawlrcInfo: rawLyricInfo,
+    isEdited: false,
   }
 }
 

@@ -524,12 +524,21 @@ export default {
 .candidateMeta {
   display: flex;
   flex-flow: row nowrap;
+  align-items: center;
   gap: 10px;
   margin-top: 4px;
   font-size: 12px;
   color: var(--color-font-label);
   span {
     .mixin-ellipsis-1();
+    flex: 0 1 auto;
+    min-width: 0;
+  }
+  // 时长固定在最右且不参与压缩，避免长专辑名把它挤成省略号
+  span:last-child {
+    flex: none;
+    margin-left: auto;
+    font-variant-numeric: tabular-nums;
   }
 }
 

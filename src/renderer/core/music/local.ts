@@ -54,12 +54,14 @@ export const getLyricInfo = async({ musicInfo, isRefresh }: {
       ? fileLyric?.lrc
       : actualSource === 'embedded' ? fileLyric?.embedded : null
 
-    if (lyricInfo?.lyric && lyricInfo.lyric != fileLyricInfo?.lyric) {
-      // 存在已编辑歌词
+    // 只有用户手动编辑/调过偏移的歌词（DB edited）才优先于文件：
+    // 旧版本遗留的 raw 歌词缓存不能盖住新写入的 .lrc，否则在线匹配「应用」后看不到任何变化
+    if (lyricInfo?.isEdited && lyricInfo.lyric) {
       return buildLyricInfo({ ...lyricInfo, rawlrcInfo: fileLyricInfo ?? lyricInfo.rawlrcInfo })
     }
 
     if (fileLyricInfo) return buildLyricInfo(fileLyricInfo)
+    // 文件里没有歌词时才退回 DB 缓存（旧版本的 raw 缓存）
     if (lyricInfo?.lyric) return buildLyricInfo(lyricInfo)
   }
 

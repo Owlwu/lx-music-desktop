@@ -4,14 +4,13 @@ import { buildExtendedLrcText, buildLrcText, sanitizeExtendedLyric } from '@comm
 import { buildAwlrcLrcText } from '@common/utils/mediaMatch/qrcLyric'
 import { checkPath } from '@common/utils/nodejs'
 import { log } from '@common/utils'
+import { mediaMatchError } from './errors'
+import { getFileState } from './fileState'
 import { createQuery, getCandidateLyric, getCandidateWordSync, searchCandidates } from './matcher'
 import { applyLrc, getLrcState, LrcFileError, rollbackLrc } from './lrcFile'
 
 const SEARCH_TIMEOUT = 15000
-const mediaMatchErrorPrefix = 'MEDIA_MATCH_ERR:'
 const lrcFileErrorPrefix = 'MEDIA_MATCH_LRC_ERR:'
-
-const mediaMatchError = (code: string): Error => new Error(mediaMatchErrorPrefix + code)
 
 const toIpcError = (err: unknown, prefix: string): Error => {
   if (err instanceof LrcFileError) return new Error(prefix + err.code)
@@ -94,6 +93,30 @@ const applyLyricFile = async(
   }
 }
 
+/**
+ * 应用/回退外挂 LRC 后清掉该曲的 DB 歌词覆盖（raw 缓存 + 已编辑/偏移快照）。
+ *
+ * 否则 `getLyricInfo` 里旧的用户快照仍优先于文件，表现为「点了应用但歌词/翻译/罗马音没生效」。
+ */
+const clearDbLyricOverride = async(musicId: string): Promise<boolean> => {
+  if (!musicId) return false
+  try {
+    const dbService = global.lx.worker.dbService
+    const [edited, raw] = await Promise.all([
+      dbService.getEditedLyric(musicId),
+      dbService.getRawLyric(musicId),
+    ])
+    if (!edited?.lyric && !raw?.lyric) return false
+    await dbService.rawLyricRemove([musicId])
+    await dbService.editedLyricRemove([musicId])
+    // 只有真的存在「已编辑/偏移」快照时才算清掉了用户改动；raw 只是旧版本的歌词缓存
+    return !!edited?.lyric
+  } catch (err) {
+    log.debug('[mediaMatch] clear db lyric override failed', err)
+    return false
+  }
+}
+
 export default () => {
   mainHandle<LX.MediaMatch.SearchParams, LX.MediaMatch.SearchResult>(MEDIA_MATCH_EVENT_NAME.search, async({ params }) => {
     const musicInfo = await assertMusicInfo(params?.musicInfo)
@@ -130,14 +153,19 @@ export default () => {
   mainHandle<LX.MediaMatch.ApplyParams, LX.MediaMatch.ApplyResult>(MEDIA_MATCH_EVENT_NAME.apply_lrc, async({ params }) => {
     const musicInfo = await assertMusicInfo(params?.musicInfo)
     const candidate = assertCandidate(params?.candidate)
-    return applyLyricFile(musicInfo, candidate)
+    const result = await applyLyricFile(musicInfo, candidate)
+    // 新 LRC 已成为该曲歌词的唯一来源：清掉旧快照，避免刷新时被 DB 缓存盖住
+    const clearedDbLyric = await clearDbLyricOverride(musicInfo.id)
+    return { ...result, clearedDbLyric }
   })
 
-  mainHandle<LX.MediaMatch.FilePathParams, LX.MediaMatch.RollbackResult>(MEDIA_MATCH_EVENT_NAME.rollback_lrc, async({ params }) => {
+  mainHandle<LX.MediaMatch.RollbackParams, LX.MediaMatch.RollbackResult>(MEDIA_MATCH_EVENT_NAME.rollback_lrc, async({ params }) => {
     const filePath = params?.filePath
     await assertFileExist(filePath)
     try {
-      return { restored: await rollbackLrc(filePath) }
+      const restored = await rollbackLrc(filePath)
+      if (restored) await clearDbLyricOverride(params?.musicId ?? '')
+      return { restored }
     } catch (err) {
       throw toIpcError(err, lrcFileErrorPrefix)
     }
@@ -147,5 +175,10 @@ export default () => {
     const filePath = params?.filePath
     if (!filePath || !await checkPath(filePath)) return { lrcExists: false, backupExists: false }
     return getLrcState(filePath)
+  })
+
+  // 批次补全用：一次解析拿到内嵌歌词/封面 + 同目录文件存在性（不抛错，坏文件按无内嵌处理）
+  mainHandle<LX.MediaMatch.FilePathParams, LX.MediaMatch.FileState>(MEDIA_MATCH_EVENT_NAME.get_file_state, async({ params }) => {
+    return getFileState(params?.filePath)
   })
 }

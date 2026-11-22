@@ -1,5 +1,8 @@
 <template>
   <div :class="$style.list">
+    <div :class="$style.toolbar">
+      <base-btn min :class="$style.toolbarBtn" :disabled="isBatchRunning" @click="startBatchMatch">{{ $t('batch_match__btn') }}</base-btn>
+    </div>
     <div class="thead">
       <table>
         <thead>
@@ -98,6 +101,7 @@
     <music-sort-modal v-model:show="isShowMusicSortModal" :music-info="selectedSortMusicInfo" :selected-num="selectedNum" @confirm="sortMusic" />
     <common-lyrics-match-modal v-model:show="isShowLyricsMatch" :music-info="matchMusicInfo" @applied="handleLyricsMatchApplied" />
     <common-cover-match-modal v-model:show="isShowCoverMatch" :music-info="matchCoverMusicInfo" @applied="handleCoverMatchApplied" @restored="handleCoverMatchRestored" />
+    <common-batch-match-modal v-model:show="isShowBatchMatch" :progress="batchProgress" @cancel="cancelBatchMatch" />
     <base-menu v-model="isShowItemMenu" :menus="menus" :xy="menuLocation" item-name="name" @menu-click="handleMenuClick" />
   </div>
 </template>
@@ -115,6 +119,7 @@ import useSort from './useSort'
 import useMusicActions from './useMusicActions'
 import useLyricsMatch from './useLyricsMatch'
 import useCoverMatch from './useCoverMatch'
+import useBatchMatch from './useBatchMatch'
 import useSearch from './useSearch'
 import useListScroll from './useListScroll'
 import { appSetting } from '@renderer/store/setting'
@@ -204,6 +209,14 @@ export default {
       handleCoverMatchApplied,
       handleCoverMatchRestored,
     } = useCoverMatch()
+
+    const {
+      isShowBatchMatch,
+      isBatchRunning,
+      batchProgress,
+      startBatchMatch,
+      cancelBatchMatch,
+    } = useBatchMatch({ props })
 
     const {
       handleCopyName,
@@ -330,6 +343,12 @@ export default {
       handleCoverMatchApplied,
       handleCoverMatchRestored,
 
+      isShowBatchMatch,
+      isBatchRunning,
+      batchProgress,
+      startBatchMatch,
+      cancelBatchMatch,
+
       scrollToTop,
 
       isShowSearchBar,
@@ -376,6 +395,18 @@ export default {
       display: inline-block;
     }
   }
+}
+.toolbar {
+  flex: none;
+  display: flex;
+  flex-flow: row nowrap;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 6px 10px;
+  border-bottom: var(--color-list-header-border-bottom);
+}
+.toolbarBtn {
+  flex: none;
 }
 .num {
   height: 100%;

@@ -122,6 +122,10 @@ declare namespace LX {
        * 本次是否写入了罗马音段（`rlrc:`）
        */
       hasRomaji?: boolean
+      /**
+       * 应用时是否清理了该曲的 DB 歌词覆盖（手动编辑/歌词偏移快照）
+       */
+      clearedDbLyric?: boolean
     }
 
     interface FilePathParams {
@@ -129,6 +133,43 @@ declare namespace LX {
        * 音频文件绝对路径（写入目标由主进程按同名规则生成）
        */
       filePath: string
+    }
+
+    /**
+     * 单曲歌词/封面存在性（批次补全的缺失判定输入）
+     */
+    interface FileState {
+      /**
+       * 音频文件本身是否存在；false 时其余字段均为 false，批次按 skipped 处理
+       */
+      fileExists: boolean
+      /**
+       * 内嵌歌词（`common.lyrics` 或 native `LYRICS`/`USLT`）
+       */
+      hasEmbeddedLyric: boolean
+      /**
+       * 同目录同名 `.lrc` / `.LRC` / `.krc` / `.KRC`（>0 字节）
+       */
+      hasSidecarLyric: boolean
+      /**
+       * 内嵌封面（`common.picture`）
+       */
+      hasEmbeddedCover: boolean
+      /**
+       * 同目录同名 `.jpg` / `.png`（>0 字节）
+       */
+      hasSidecarCover: boolean
+    }
+
+    interface RollbackParams {
+      /**
+       * 音频文件绝对路径
+       */
+      filePath: string
+      /**
+       * 歌曲 id（本地曲为文件路径）；有值时回退成功后一并清理该曲的 DB 歌词覆盖
+       */
+      musicId?: string
     }
 
     interface RollbackResult {

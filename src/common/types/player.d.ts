@@ -17,6 +17,11 @@ declare namespace LX {
 
     interface LyricInfo extends LX.Music.LyricInfo {
       rawlrcInfo: LX.Music.LyricInfo
+      /**
+       * true = 来自 DB 的「已编辑/已调偏移」歌词（用户手动改过）；
+       * false/undefined = 直接来自文件（内嵌或同名 .lrc）的歌词
+       */
+      isEdited?: boolean
     }
 
     interface Status {

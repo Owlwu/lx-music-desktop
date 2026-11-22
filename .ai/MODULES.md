@@ -18,7 +18,7 @@
 | **tray** | `tray.ts` | 托盘图标/菜单（播放控制、显示、退出） |
 | **appMenu** | `appMenu.ts` | 应用菜单栏 |
 | **sync** | `sync/` | 跨端同步：`server/`（主机）+ `client/`（连接）+ `musicFile/`（本地音乐文件同步） |
-| **mediaMatch** | `mediaMatch/` | 在线歌词匹配：`index.ts` 注册、`rendererEvent.ts` IPC、`matcher.ts` 编排、`providers/{lrclib,qq,netease}.ts`、`lrcFile.ts` 文件规则；QQ 候选支持 QRC 逐字（`[awlrc:]`），netease 候选带行级翻译/罗马音（`tlrc:`/`rlrc:`） |
+| **mediaMatch** | `mediaMatch/` | 在线歌词匹配：`index.ts` 注册、`rendererEvent.ts` IPC、`matcher.ts` 编排（三源并行 + 单源 6s 超时）、`errors.ts`（`MEDIA_MATCH_ERR:` 前缀与构造）、`fileState.ts`（批次补全用一次解析判定内嵌歌词/封面 + 同目录文件）、`providers/{lrclib,qq,netease}.ts`、`lrcFile.ts` 文件规则；QQ 候选支持 QRC 逐字（`[awlrc:]`），netease 候选带行级翻译/罗马音（`tlrc:`/`rlrc:`） |
 | **coverMatch** | `coverMatch/` | 在线封面匹配：`index.ts` 注册、`rendererEvent.ts` IPC、`matcher.ts` 编排/下载、`providers/{qq,itunes}.ts`、`coverFile.ts` 同名图规则 |
 
 ### winMain 内部
@@ -57,7 +57,7 @@
 | `defaultSetting.ts` / `defaultHotKey.ts` | 设置/快捷键默认值（已剔除音源、搜索、下载、OpenAPI、自动更新键） |
 | `config.ts` | 窗口尺寸档位、白名单等 |
 | `constants_sync.ts` | 同步协议常量与 `FeaturesList`（`list` / `dislike` / `musicFile`） |
-| `utils/` | `common`、`nodejs`、`request`(undici)、`tools`、`electron`、`lyricUtils`（含 `kg.js` KRC、`qrc.js` QRC 解码）、`lyric-font-player`、`pinyin`、`migrateSetting`、`musicSidecar`（移除本地歌曲时同名歌词/封面路径推导，纯函数）、`mediaMatch/`（纯逻辑：normalize/score/query/lrcText/source/qqParse/qrcLyric）、`coverMatch/`（纯逻辑：score） |
+| `utils/` | `common`、`nodejs`、`request`(undici)、`tools`、`electron`、`lyricUtils`（含 `kg.js` KRC、`qrc.js` QRC 解码）、`lyric-font-player`、`pinyin`、`migrateSetting`、`musicSidecar`（移除本地歌曲时同名歌词/封面路径推导，纯函数）、`mediaMatch/`（纯逻辑：normalize/score/query/lrcText/source/qqParse/qrcLyric/fileState/batch）、`coverMatch/`（纯逻辑：score） |
 
 ## 4. 主窗口渲染进程 — `src/renderer/`
 
@@ -85,7 +85,7 @@
 ### views
 | 路径 | 作用 |
 | --- | --- |
-| `views/List/` | 我的列表（`MyList/`）+ 歌曲列表（`MusicList/`）：导入文件夹/文件、排序、去重、导入导出、右键菜单、列表内搜索 |
+| `views/List/` | 我的列表（`MyList/`）+ 歌曲列表（`MusicList/`）：导入文件夹/文件、排序、去重、导入导出、右键菜单、列表内搜索；`MusicList/useBatchMatch.js` 一键补全当前列表缺失歌词/封面（入口为列表顶部工具条） |
 | `views/Setting/` | 设置：`SettingBasic`（主题/语言/字体/窗口/控制按钮位置）、`SettingPlay`、`SettingPlayDetail`、`SettingDesktopLyric`、`SettingList`、`SettingSync/`（含 `MusicFileSync.vue`）、`SettingHotKey`、`SettingNetwork`（代理）、`SettingBackup`、`SettingOther`、`SettingAbout`，以及 `ThemeEditModal/` |
 
 ### components / plugins / worker
@@ -95,7 +95,7 @@
 | `components/layout/{Aside,Toolbar,PlayBar,PlayDetail}/` | 主框架：侧栏（导航 + 左上 logo/窗口按钮）、工具栏（**页面标题 + 右上角窗口按钮**）、播放栏、播放详情页 |
 | `components/layout/{PactModal,SyncModeModal,SyncAuthCodeModal,Icons,View}.vue` | 协议弹窗、同步弹窗、图标 sprite、路由出口 |
 | `components/base/` | 基础控件：`Btn Checkbox Input Menu MusicList Popup Selection SliderBar Tab VirtualizedList` |
-| `components/common/` | 通用业务控件：`ListAddModal`、`ListAddMultipleModal`、`LyricsMatchModal`（在线匹配歌词/逐字）、`CoverMatchModal`（在线匹配封面）、`PlaybackRateBtn`、`ProgressBar`、`SoundEffectBtn/`、`TogglePlayModeBtn`、`VolumeBtn`、`AudioVisualizer` 等 |
+| `components/common/` | 通用业务控件：`ListAddModal`、`ListAddMultipleModal`、`LyricsMatchModal`（在线匹配歌词/逐字）、`CoverMatchModal`（在线匹配封面）、`BatchMatchModal`（一键补全进度/取消/汇总）、`PlaybackRateBtn`、`ProgressBar`、`SoundEffectBtn/`、`TogglePlayModeBtn`、`VolumeBtn`、`AudioVisualizer` 等 |
 | `components/material/` | 列表行按钮、排序等列表物料（`ListButtons.vue` 已无下载按钮） |
 | `plugins/player/` | 音频引擎（HTMLAudioElement + Web Audio：EQ、卷积、声像、变速、analyser） |
 | `plugins/{Dialog,SvgIcon,Tips}/` | 对话框、图标、提示 |
@@ -133,6 +133,6 @@
 - `src/lang/` — i18n 文案（`zh-cn` / `zh-tw` / `en-us` / `ko-kr`）
 - `src/static/` — 打包时复制到应用旁的静态资源（`global.staticPath`）
 - `doc/music-file-sync/本地音乐文件同步-设计.md` — musicFile 同步契约
-- `tests/` — musicFile 同步 / 在线歌词匹配 / 封面匹配 / 逐字歌词纯逻辑测试（node 直接运行，不进 bundle、不参与 lint）
+- `tests/` — musicFile 同步 / 在线歌词匹配 / 封面匹配 / 逐字歌词 / 一键补全批次（`batch-match`，含真实 `localmusic` 文件检测）纯逻辑测试（node 直接运行，不进 bundle、不参与 lint）
 - `docs/online-lyrics-match-design.md`、`docs/phase2-design.md`（仓库外 `LXMusic/docs/`）— 一期/二期功能契约
 - `dist/` — webpack 输出（`dist/main.js` 是打包入口）

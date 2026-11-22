@@ -27,7 +27,9 @@ export default () => {
     await setMusicLyricSource(musicInfo, 'lrc', matchListId)
     await refreshPlayLyric(musicInfo)
     await dialog({
-      message: window.i18n.t('lyrics_match__apply_success', { file: getFileName(applied?.lrcPath) }),
+      message: window.i18n.t(applied?.clearedDbLyric ? 'lyrics_match__apply_success_cleared' : 'lyrics_match__apply_success', {
+        file: getFileName(applied?.lrcPath),
+      }),
     })
   }
 

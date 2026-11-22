@@ -456,9 +456,11 @@ export const mediaMatchApplyLrc = async(params: LX.MediaMatch.ApplyParams) => {
 
 /**
  * 在线匹配歌词：回退到 .lrc.bak
+ * @param filePath 音频文件路径
+ * @param musicId 歌曲 id；传入后回退成功会一并清理该曲的 DB 歌词覆盖
  */
-export const mediaMatchRollbackLrc = async(filePath: string) => {
-  return rendererInvoke<LX.MediaMatch.FilePathParams, LX.MediaMatch.RollbackResult>(MEDIA_MATCH_EVENT_NAME.rollback_lrc, { filePath })
+export const mediaMatchRollbackLrc = async(filePath: string, musicId?: string) => {
+  return rendererInvoke<LX.MediaMatch.RollbackParams, LX.MediaMatch.RollbackResult>(MEDIA_MATCH_EVENT_NAME.rollback_lrc, { filePath, musicId })
 }
 
 /**
@@ -466,6 +468,13 @@ export const mediaMatchRollbackLrc = async(filePath: string) => {
  */
 export const mediaMatchGetLrcState = async(filePath: string) => {
   return rendererInvoke<LX.MediaMatch.FilePathParams, LX.MediaMatch.LrcState>(MEDIA_MATCH_EVENT_NAME.get_lrc_state, { filePath })
+}
+
+/**
+ * 批次补全：一次拿到内嵌歌词/封面与同目录同名文件存在性
+ */
+export const mediaMatchGetFileState = async(filePath: string) => {
+  return rendererInvoke<LX.MediaMatch.FilePathParams, LX.MediaMatch.FileState>(MEDIA_MATCH_EVENT_NAME.get_file_state, { filePath })
 }
 
 /**

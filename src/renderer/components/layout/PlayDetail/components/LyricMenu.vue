@@ -270,7 +270,7 @@ export default {
       })
       if (!confirm) return
       try {
-        const result = await mediaMatchRollbackLrc(musicInfo.meta.filePath)
+        const result = await mediaMatchRollbackLrc(musicInfo.meta.filePath, musicInfo.id)
         if (!result.restored) {
           await dialog({ message: window.i18n.t('lyric_menu__restore_none') })
           return

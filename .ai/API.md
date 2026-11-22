@@ -31,7 +31,7 @@
 - 歌词：`getPlayerLyric`、`getLyricRaw`、`clearLyricRaw`、`getLyricRawCount`、`getLyricEdited`、
   `saveLyric`、`saveLyricEdited`、`removeLyricEdited`、`clearLyric`、`clearLyricEdited`、`getLyricEditedCount`
 - 在线歌词匹配（`media_match_*`）：`mediaMatchSearch`、`mediaMatchGetLyric`、`mediaMatchGetWordSync`、`mediaMatchApplyLrc`、
-  `mediaMatchRollbackLrc`、`mediaMatchGetLrcState`
+  `mediaMatchRollbackLrc`、`mediaMatchGetLrcState`、`mediaMatchGetFileState`
 - 在线封面匹配（`cover_match_*`）：`coverMatchSearch`、`coverMatchApply`、`coverMatchGetState`、`coverMatchRollback`
 - 主题：`getThemes`、`saveTheme`、`removeTheme`、`onThemeChange`
 - 音效预设：`getUserSoundEffectEQPresetList`/`save...`、`getUserSoundEffectConvolutionPresetList`/`save...`
@@ -132,12 +132,15 @@ togglePlay/pause/stop/collectMusic/uncollectMusic/dislikeMusic/setMusicUrl`）�
 | `media_match_get_lyric` | `{ candidate }` | `{ lyric, isSynced, tlyric?, rlyric? } \| null` |
 | `media_match_get_word_sync` | `{ candidate }` | `{ lyric, lxlyric } \| null`（仅 QQ QRC；失败返回 null） |
 | `media_match_apply_lrc` | `{ musicInfo, candidate }` | `{ lrcPath, backupCreated, hasWordSync, hasTranslation?, hasRomaji? }` |
-| `media_match_rollback_lrc` | `{ filePath }`（音频路径） | `{ restored }` |
+| `media_match_rollback_lrc` | `{ filePath, musicId? }`（音频路径 + 可选歌曲 id） | `{ restored }` |
 | `media_match_get_lrc_state` | `{ filePath }`（音频路径） | `LrcState` |
+| `media_match_get_file_state` | `{ filePath }`（音频路径） | `FileState`（见 §8） |
 
 - 错误码以字符串前缀跨 IPC 传递：`MEDIA_MATCH_ERR:<code>`、`MEDIA_MATCH_LRC_ERR:<no_permission|disk_full|unknown>`；
   渲染侧 `renderer/utils/mediaMatch.ts` 负责解析与 i18n 映射。
 - 路径安全：主进程 `checkPath` + `lrcFile.isAudioFilePath` 双重校验；只写音频所在目录的同名 `.lrc`。
+- 应用/回退成功后清理该曲 DB 歌词覆盖（`raw` + `edited`），保证新 `.lrc` 立刻生效；`apply_lrc` 结果带
+  `clearedDbLyric` 标记，渲染侧据此提示「已清除该曲原有的手动编辑/歌词偏移」。
 - 文件规则（`lrcFile.ts`）：已有 `.lrc` 且无 `.lrc.bak` 时先备份；临时文件 + rename 原子写；失败自动恢复备份；
   回退 = 删除当前 `.lrc` 并把 `.lrc.bak` 改回。绝不改动音频文件。
 
@@ -153,7 +156,9 @@ togglePlay/pause/stop/collectMusic/uncollectMusic/dislikeMusic/setMusicUrl`）�
   - `tlyric.lyric` → 中文翻译、`romalrc.lyric`（回退 `yromalrc`）→ 罗马音，均做行级清洗（只留时间轴行，去 `//`/元信息）；
   - 必须带桌面 UA + `Referer: https://music.163.com/`，不发送 Cookie；串行 ≥300ms、10s 超时、4MB 上限；
     业务 `code!==200` / `nolyric` / `uncollected` / 无主歌词 → 降级；日志只记 source/cost/count/code。
-- `matcher.ts`：`lrclib -> qq -> netease` 三源并发（≤2）、`allSettled` 降级、聚合 → 打分 → 去重 → 排序（≤30）。
+- `matcher.ts`：`lrclib -> qq -> netease` 三源并行 + **单源预算 6s**（`searchSource`，到点只 abort 该源，
+  总耗时不再由最慢源决定）、聚合 → 打分 → 去重 → 排序（≤30）；有候选即返回，候选为空且 ≥1 个源失败/超时 →
+  抛 `MEDIA_MATCH_ERR:search_failed`（前缀常量在 `errors.ts`）。
 - 纯逻辑在 `src/common/utils/mediaMatch/`：`normalize`（全角/清洗/伴奏标记）、`score`（0.5/0.3/0.2 + 伴奏减半）、
   `query`（查询变体）、`lrcText`（LRC 生成 + 取词有效性校验 + `sanitizeExtendedLyric` / `buildExtendedLrcText` /
   `getLyricPreviewEntries`）、`source`（内嵌/LRC 来源回退）、`qqParse`（QQ 响应解析）、
@@ -194,3 +199,33 @@ togglePlay/pause/stop/collectMusic/uncollectMusic/dislikeMusic/setMusicUrl`）�
   （只保留第一次备份），`.tmp` + rename 原子写，失败恢复；回退 = `.bak` 原子写回并删除备份。绝不改音频。
 
 不要复活 `core/music/online.ts` 那套「抓音源 + 换源」结构。
+
+## 8. 一键补全缺失歌词/封面（批次）
+
+对**当前列表**逐首检查「内嵌歌词/封面 + 同目录同名文件」，只对两项都缺失的歌曲自动匹配并写入第一个可用结果；
+串行、每首约 200ms、可取消、有进度与结束汇总。
+
+### IPC
+
+| 事件 | 参数 | 返回 |
+| --- | --- | --- |
+| `media_match_get_file_state` | `{ filePath }`（音频绝对路径） | `{ fileExists, hasEmbeddedLyric, hasSidecarLyric, hasEmbeddedCover, hasSidecarCover }` |
+
+- 主进程实现 `main/modules/mediaMatch/fileState.ts`：一次 `music-metadata` 解析同时判定内嵌歌词/封面；
+  同目录 `.lrc/.LRC/.krc/.KRC`、`.jpg/.png` 用 `fs.stat` 判存在且 **>0 字节**。
+- 性能：同目录歌词与封面都已存在时**不调用** `parseFile`（`common/utils/mediaMatch/fileState.shouldParseAudioMetadata`）。
+- 健壮性：文件不存在/损坏/无权限一律返回「无内嵌」且不抛错；渲染层按 `fileExists=false` 计 `skipped`。
+- 内嵌歌词口径：`common.lyrics`（含 `syncText`，覆盖 M4A `©lyr`）trim 非空，或 native `LYRICS`/`USLT` >10 字符；
+  内嵌封面：`common.picture` 非空。
+
+### 纯逻辑 / 渲染接线
+
+- `common/utils/mediaMatch/fileState.ts`：同目录路径推导、内嵌判定、`getMissingFlags` 真值表、`getFileState`。
+- `common/utils/mediaMatch/batch.ts`：`createBatchMatcher(deps)` 批次编排（扫描 → 补全 → 汇总）与自动选择顺序：
+  - 歌词：`[0, ...(start+1..start+4 中 !instrumental && score>=0.6 的下标)]`，第一个 `lyric.trim()` 非空且写入成功即采用；
+  - 封面：`[0,1,2]`，第一个下载+写入成功即采用；
+  - 同时提供 `toPlainMusicInfo` / `toPlainLyricCandidate` / `toPlainCoverCandidate`（Vue Proxy 跨 IPC structured clone 会抛错）。
+- `renderer/views/List/MusicList/useBatchMatch.js`：注入 IPC/`refreshPlayLyric`/`refreshPlayCover`/`setMusicLyricSource(...,'lrc')`；
+  `components/common/BatchMatchModal.vue` 显示扫描/补全阶段、进度、歌曲名、计数与取消；`MusicList/index.vue` 顶部工具条按钮
+  （`batch_match__btn`）→ `dialog.confirm(batch_match__confirm)` → 开始。
+- i18n key 前缀 `batch_match__`（§8 契约表 + 弹窗计数/取消中文案），四语齐全。

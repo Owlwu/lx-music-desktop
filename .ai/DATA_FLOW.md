@@ -75,7 +75,7 @@ sendPlayerStatus(partial) → IPC `player_status` → main 更新 global.lx.play
 | 资源 | 取法 |
 | --- | --- |
 | 封面 | 优先 `renderer/worker/main/music.ts getMusicFilePic(filePath)`（内嵌封面 `selectCover`；先找同名 `.jpg`/`.png`，返回路径带 `?v=<mtimeMs>` 以击穿图片缓存）；其次 `musicInfo.meta.picUrl`（历史缓存/匹配结果） |
-| 歌词 | `getCachedLyricInfo(musicInfo)`（DB `lyric` 的 raw/edited）与 `getMusicFileLyric(filePath)` 并行取：worker 一次返回 `{ embedded, lrc }`，`embedded` 为内嵌（ID3 `USLT`/`LYRICS`、FLAC `LYRICS`），`lrc` 为同名 `.lrc`（`jschardet` 探测编码 + `iconv-lite` 解码）→ 无则同名 `.krc`（`decodeKrc`）；`core/music/local.ts` 按 `meta.lyricSource ?? player.lyricSource`（默认 `embedded`）选择，所选来源为空时自动回退另一来源；若已编辑歌词与文件歌词不一致，用已编辑歌词并保留文件原词作 `rawlrcInfo` |
+| 歌词 | `getCachedLyricInfo(musicInfo)`（DB `lyric` 的 raw/edited）与 `getMusicFileLyric(filePath)` 并行取：worker 一次返回 `{ embedded, lrc }`，`embedded` 为内嵌（ID3 `USLT`/`LYRICS`、FLAC `LYRICS`），`lrc` 为同名 `.lrc`（`jschardet` 探测编码 + `iconv-lite` 解码）→ 无则同名 `.krc`（`decodeKrc`）；`core/music/local.ts` 按 `meta.lyricSource ?? player.lyricSource`（默认 `embedded`）选择，所选来源为空时自动回退另一来源。优先级：**DB `edited`（用户手动编辑/调过偏移，`isEdited=true`）> 文件歌词 > DB `raw` 缓存兜底**；旧 raw 缓存不得盖住文件，否则在线匹配应用后看不到变化（应用/回退 LRC 时清 raw+edited 行） |
 | 显示转换 | `buildLyricInfo()` 处理繁简转换（`player.isS2t`）并补齐 `rawlrcInfo` |
 
 ## 3.1 在线歌词匹配（外挂 LRC）
@@ -129,6 +129,34 @@ sendPlayerStatus(partial) → IPC `player_status` → main 更新 global.lx.play
 - 回退：弹窗「恢复原封面」→ `cover_match_rollback`（`.bak` 原子写回，删除备份）。
 - 状态：`cover_match_get_state` 返回 imageExists/backupExists/size/mtime。
 - 约束：不内嵌、不改音频；只写同目录同名 `.jpg`/`.png`（小写）；webp 拒绝（读取链路只认 jpg/png）。
+
+## 3.3 一键补全当前列表缺失歌词/封面
+
+```
+列表顶部工具条「一键补全缺失歌词/封面」（MusicList/index.vue）
+  → views/List/MusicList/useBatchMatch.js：getListMusics(listId) 统计本地歌曲 → dialog.confirm(batch_match__confirm)
+  → components/common/BatchMatchModal.vue：显示扫描/补全阶段、进度、歌曲名、计数、取消、结束汇总
+  → common/utils/mediaMatch/batch.createBatchMatcher(deps)（纯逻辑、串行、每首 ~200ms、可取消）
+      ├─ 扫描：IPC media_match_get_file_state { filePath }（每首一次）
+      │    → main/modules/mediaMatch/fileState.ts → common/utils/mediaMatch/fileState.ts
+      │       ├─ fs.stat 同目录 .lrc/.LRC/.krc/.KRC、.jpg/.png（>0 字节）
+      │       ├─ 同目录歌词+封面都存在 → 跳过 music-metadata 解析
+      │       └─ 否则 parseFile 一次拿内嵌歌词（common.lyrics / native LYRICS/USLT）+ 内嵌封面（common.picture）
+      │    → 缺失判定：歌词缺失 = 无内嵌且无独立文件；封面同理；fileExists=false 计 skipped
+      └─ 补全：仅处理缺失项
+           ├─ 歌词：media_match_search → media_match_get_lyric（第 1 个候选；无效时沿排序最多再试 4 个
+           │        score>=0.6 且非 instrumental）→ media_match_apply_lrc
+           │        → 成功后 setMusicLyricSource(musicInfo,'lrc',listId) + refreshPlayLyric()
+           └─ 封面：cover_match_search → cover_match_apply（第 1 个；失败最多再试后续 2 个）
+                    → 成功后 refreshPlayCover()
+  → 结束：没有缺失 → batch_match__none；有处理 → batch_match__summary；
+          中途取消（不再开始新歌曲，当前歌曲做完收尾）→ batch_match__canceled
+```
+
+- 所有跨 IPC 参数必须转普通对象（`toPlainMusicInfo` / `toPlainLyricCandidate` / `toPlainCoverCandidate`），
+  Vue 响应式 Proxy 无法 structured clone。
+- 单曲任意异常 catch 后计 `failed` 并继续下一首；文件不存在计 `skipped`；非本地歌曲直接忽略。
+- 只新增文件、不覆盖已有独立文件（参与歌曲本来就没有 `.lrc`/封面），`applyLrc`/`applyCoverImage` 的备份与原子写逻辑不变。
 
 ## 4. IPC 通用往返
 

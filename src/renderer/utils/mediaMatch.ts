@@ -4,6 +4,7 @@ export type MediaMatchErrorCode =
   | 'invalid_candidate'
   | 'no_lyric'
   | 'instrumental'
+  | 'search_failed'
   | 'lrc_no_permission'
   | 'lrc_disk_full'
   | 'lrc_unknown'
@@ -34,6 +35,7 @@ export const getMediaMatchErrorCode = (err: unknown): MediaMatchErrorCode => {
       case 'invalid_candidate': return 'invalid_candidate'
       case 'no_lyric': return 'no_lyric'
       case 'instrumental': return 'instrumental'
+      case 'search_failed': return 'search_failed'
       default: return 'unknown'
     }
   }
@@ -55,6 +57,8 @@ export const getMediaMatchErrorKey = (code: MediaMatchErrorCode): string => {
       return 'lyrics_match__not_found'
     case 'instrumental':
       return 'lyrics_match__instrumental'
+    case 'search_failed':
+      return 'lyrics_match__err_search_failed'
     case 'lrc_no_permission':
       return 'lyrics_match__err_no_permission'
     case 'lrc_disk_full':

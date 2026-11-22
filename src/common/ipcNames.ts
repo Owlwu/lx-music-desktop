@@ -140,6 +140,7 @@ const modules = {
     apply_lrc: 'apply_lrc',
     rollback_lrc: 'rollback_lrc',
     get_lrc_state: 'get_lrc_state',
+    get_file_state: 'get_file_state',
   },
   cover_match: {
     search: 'search',
