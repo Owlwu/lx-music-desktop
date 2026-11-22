@@ -4,6 +4,7 @@
  * 直接使用 node 运行（Node 24 原生支持 TypeScript 类型擦除）：
  *   node tests/music-file-sync.test.ts   （在 lx-music-desktop 目录下执行）
  */
+import fs from 'node:fs'
 import {
   buildIndex,
   buildPlan,
@@ -15,6 +16,10 @@ import {
   isPathInScope,
   normalizeScope,
   getLyricRelPath,
+  getCoverRelPath,
+  isCoverFileName,
+  getCoverFormat,
+  getActionTargets,
   assertSafeRelPath,
   planSelectionKey,
   type FileIndex,
@@ -54,7 +59,17 @@ const file = (path: string, size: number, lyricSize: number | null = null): Scan
   return list
 }
 
+/** 同名封面条目（只认小写 jpg/png） */
+const cover = (path: string, format: 'jpg' | 'png', size: number): ScanEntry[] => [
+  { path: getCoverRelPath(path, format), size, mtime: 3000 },
+]
+
 const indexOf = (...entries: ScanEntry[][]): FileIndex => buildIndex(entries.flat())
+
+/** 新版本扫描器：buildIndex + coverSupport（封面能力标记） */
+const indexWithSupport = (...entries: ScanEntry[][]): FileIndex => ({ ...buildIndex(entries.flat()), coverSupport: true })
+
+const planItemCount = (plan: PlanGroups) => Object.values(plan).reduce((sum, items) => sum + items.length, 0)
 
 /** 带内容签名的音频条目（size 相同、签名不同 = 内容不同） */
 const signed = (path: string, size: number, sig: string): ScanEntry[] => [{ path, size, mtime: 1000, sig }]
@@ -82,17 +97,43 @@ check('trailing slash rejected', isSafeRelPath('a/b/'), false)
 check('empty segment rejected', isSafeRelPath('a//b.mp3'), false)
 checkThrows('assertSafeRelPath throws on escape', () => assertSafeRelPath('../../x'))
 
-console.log('\n== 歌词伴生路径与索引 ==')
+console.log('\n== 歌词/封面伴生路径与索引 ==')
 check('lyric path for flac', getLyricRelPath('a/b/c.flac'), 'a/b/c.lrc')
 check('lyric path without ext', getLyricRelPath('a/b/c'), 'a/b/c.lrc')
+check('cover path jpg', getCoverRelPath('a/b/c.flac', 'jpg'), 'a/b/c.jpg')
+check('cover path png', getCoverRelPath('a/b/c.flac', 'png'), 'a/b/c.png')
+check('cover file name lower-case only: jpg', isCoverFileName('a/b/c.jpg'), true)
+check('cover file name lower-case only: png', isCoverFileName('a/b/c.png'), true)
+check('.JPG 不参与', isCoverFileName('a/b/c.JPG'), false)
+check('.PNG 不参与', isCoverFileName('a/b/c.PNG'), false)
+check('getCoverFormat 只返回小写', [getCoverFormat('x.jpg'), getCoverFormat('x.PNG'), getCoverFormat('x.lrc')], ['jpg', null, null])
 
-const basic = indexOf(file('a/song.flac', 100, 10), file('root.mp3', 50), [{ path: 'notaudio.txt', size: 1, mtime: 0 }])
+const basic = indexOf(
+  file('a/song.flac', 100, 10),
+  cover('a/song.flac', 'jpg', 5000),
+  file('root.mp3', 50),
+  [{ path: 'notaudio.txt', size: 1, mtime: 0 }],
+)
 check('only audio files indexed', basic.files.map(f => f.path), ['a/song.flac', 'root.mp3'])
 check('lyric attached to audio', basic.files[0].lyric, { size: 10, mtime: 2000 })
 check('lyric absent -> null', basic.files[1].lyric, null)
+check('cover attached to audio', basic.files[0].cover, { format: 'jpg', size: 5000, mtime: 3000 })
+check('cover absent -> null', basic.files[1].cover, null)
+check('buildIndex 保持纯函数（不带 coverSupport）', basic.coverSupport, undefined)
 check('folders collected', basic.folders, ['a'])
 check('orphan lyric ignored', indexOf([{ path: 'a/only.lrc', size: 10, mtime: 0 }]).files, [])
+check('orphan cover ignored', indexOf([{ path: 'a/only.jpg', size: 10, mtime: 0 }]).files, [])
 check('nested folders collected', indexOf(file('a/b/c/d.mp3', 1)).folders, ['a', 'a/b', 'a/b/c'])
+
+// 同 stem 同时存在 jpg/png：与播放优先级一致取 jpg，且与目录枚举顺序无关
+const bothCovers = indexOf(file('a/song.flac', 100), cover('a/song.flac', 'png', 6000), cover('a/song.flac', 'jpg', 5000))
+check('jpg 优先于 png', bothCovers.files[0].cover, { format: 'jpg', size: 5000, mtime: 3000 })
+const pngOnly = indexOf(file('a/song.flac', 100), cover('a/song.flac', 'png', 6000))
+check('无 jpg 时回退 png', pngOnly.files[0].cover, { format: 'png', size: 6000, mtime: 3000 })
+const upperCover = indexOf(file('a/song.flac', 100), [{ path: 'a/song.JPG', size: 7000, mtime: 3000 }])
+check('.JPG 不挂到音频上', upperCover.files[0].cover, null)
+check('scanIndex 声明 coverSupport', fs.readFileSync(new URL('../src/main/modules/sync/musicFile/localFs.ts', import.meta.url), 'utf8').includes('coverSupport: true'), true)
+check('扫描器纳入小写封面', fs.readFileSync(new URL('../src/main/modules/sync/musicFile/localFs.ts', import.meta.url), 'utf8').includes('isCoverFileName'), true)
 
 console.log('\n== scope 过滤 ==')
 check('empty scope = all', isPathInScope('a/b/c.mp3', []), true)
@@ -143,7 +184,7 @@ check('conflict 默认不勾选', plan.conflict.every(i => !i.defaultChecked), t
 check('conflict 默认以远端为准', plan.conflict.every(i => i.defaultDirection === 'pull'), true)
 check('localAdded 方向为 push', plan.localAdded.every(i => i.defaultDirection === 'push'), true)
 
-console.log('\n== 传输动作（含歌词伴生） ==')
+console.log('\n== 传输动作（伴生歌词/封面用 sidecars 表达） ==')
 const plan2 = buildPlan(
   indexOf(file('a.flac', 100), file('b.flac', 200), file('c.flac', 300, 30), file('e.flac', 500)),
   indexOf(file('a.flac', 100), file('d.flac', 400, 40), file('e.flac', 501), file('f.flac', 600)),
@@ -156,24 +197,164 @@ const sel = selected(plan2, [
   ['conflict', 'e.flac'],
 ])
 const actions = buildActions(plan2, sel, {})
-check('download 携带歌词', actions.find(a => a.path === 'd.flac'), { kind: 'download', path: 'd.flac', size: 400, hasLyric: true })
-check('upload 携带歌词', actions.find(a => a.path === 'c.flac'), { kind: 'upload', path: 'c.flac', size: 300, hasLyric: true })
-check('delete_local 携带歌词', actions.find(a => a.path === 'b.flac'), { kind: 'delete_local', path: 'b.flac', hasLyric: false })
-check('conflict 默认 pull', actions.find(a => a.path === 'e.flac'), { kind: 'download', path: 'e.flac', size: 501, hasLyric: false })
+check('download 携带歌词 sidecar', actions.find(a => a.path === 'd.flac'), {
+  kind: 'download', path: 'd.flac', size: 400, sidecars: [{ path: 'd.lrc', size: 40, kind: 'lyric' }],
+})
+check('upload 携带歌词 sidecar', actions.find(a => a.path === 'c.flac'), {
+  kind: 'upload', path: 'c.flac', size: 300, sidecars: [{ path: 'c.lrc', size: 30, kind: 'lyric' }],
+})
+check('delete_local 无伴生文件', actions.find(a => a.path === 'b.flac'), { kind: 'delete_local', path: 'b.flac', sidecars: [] })
+check('conflict 默认 pull', actions.find(a => a.path === 'e.flac'), { kind: 'download', path: 'e.flac', size: 501, sidecars: [] })
 check('未勾选不产生动作', actions.some(a => a.path === 'f.flac'), false)
 check('动作数量', actions.length, 4)
 
 const pushActions = buildActions(plan2, sel, { [planSelectionKey('conflict', 'e.flac')]: 'push' })
-check('conflict 可改为 push', pushActions.find(a => a.path === 'e.flac'), { kind: 'upload', path: 'e.flac', size: 500, hasLyric: false })
+check('conflict 可改为 push', pushActions.find(a => a.path === 'e.flac'), { kind: 'upload', path: 'e.flac', size: 500, sidecars: [] })
 
-console.log('\n== 删除也带上伴生歌词 ==')
+console.log('\n== 删除也带上伴生歌词+封面 ==')
 const delPlan = buildPlan(
-  indexOf(file('a.flac', 100, 10), file('b.flac', 200, 20)),
-  indexOf(file('a.flac', 100, 10)),
+  indexOf(file('a.flac', 100, 10), cover('a.flac', 'jpg', 1000), file('b.flac', 200, 20), cover('b.flac', 'png', 2000)),
+  indexOf(file('a.flac', 100, 10), cover('a.flac', 'jpg', 1000)),
   ['a.flac', 'b.flac'],
 )
 const delActions = buildActions(delPlan, { [planSelectionKey('remoteDeleted', 'b.flac')]: true }, {})
-check('删除本地时带上歌词', delActions, [{ kind: 'delete_local', path: 'b.flac', hasLyric: true }])
+check('删除本地时带上歌词+封面', delActions, [{
+  kind: 'delete_local',
+  path: 'b.flac',
+  sidecars: [
+    { path: 'b.lrc', size: 20, kind: 'lyric' },
+    { path: 'b.png', size: 2000, kind: 'cover' },
+  ],
+}])
+check('动作目标路径 = 音频 + sidecars', getActionTargets(delActions[0]), ['b.flac', 'b.lrc', 'b.png'])
+
+console.log('\n== 只改伴生文件不产生同步项 ==')
+const stableAudio = indexOf(file('keep.flac', 1000))
+const changedSidecars = indexOf(
+  file('keep.flac', 1000),
+  { path: 'keep.lrc', size: 888, mtime: 999999 },
+  cover('keep.flac', 'jpg', 4096),
+)
+check('仅 .lrc/.jpg 变化 → 清单为空', planItemCount(buildPlan(stableAudio, changedSidecars, ['keep.flac'])), 0)
+check('仅删除 .lrc 不产生项', planItemCount(buildPlan(changedSidecars, stableAudio, ['keep.flac'])), 0)
+
+console.log('\n== 新增歌曲：本地歌词/封面搭车上传 ==')
+const localNewIndex = indexWithSupport(file('new.flac', 300, 30), cover('new.flac', 'jpg', 3000))
+const emptySupported = indexWithSupport()
+const uploadPlan = buildPlan(localNewIndex, emptySupported, [])
+const uploadItem = uploadPlan.localAdded[0]
+check('本地新增项 cover 标记', [uploadItem.localHasLyric, uploadItem.localHasCover, uploadItem.remoteHasCover], [true, true, false])
+check('uploadSidecars 歌词+封面', uploadItem.uploadSidecars, [
+  { path: 'new.lrc', size: 30, kind: 'lyric' },
+  { path: 'new.jpg', size: 3000, kind: 'cover' },
+])
+const uploadAction = buildActions(uploadPlan, { [planSelectionKey('localAdded', 'new.flac')]: true }, {})
+check('上传动作携带 sidecars', uploadAction, [{
+  kind: 'upload',
+  path: 'new.flac',
+  size: 300,
+  sidecars: [
+    { path: 'new.lrc', size: 30, kind: 'lyric' },
+    { path: 'new.jpg', size: 3000, kind: 'cover' },
+  ],
+}])
+
+console.log('\n== 远端新增：对端歌词/封面搭车下载 ==')
+const remoteNewIndex = indexWithSupport(file('remote.flac', 400, 40), cover('remote.flac', 'png', 4000))
+const downloadPlan = buildPlan(emptySupported, remoteNewIndex, [])
+const downloadItem = downloadPlan.remoteAdded[0]
+check('远端新增项 cover 标记', [downloadItem.localHasCover, downloadItem.remoteHasLyric, downloadItem.remoteHasCover], [false, true, true])
+check('downloadSidecars 歌词+封面', downloadItem.downloadSidecars, [
+  { path: 'remote.lrc', size: 40, kind: 'lyric' },
+  { path: 'remote.png', size: 4000, kind: 'cover' },
+])
+const downloadAction = buildActions(downloadPlan, { [planSelectionKey('remoteAdded', 'remote.flac')]: true }, {})
+check('下载动作携带 sidecars', downloadAction, [{
+  kind: 'download',
+  path: 'remote.flac',
+  size: 400,
+  sidecars: [
+    { path: 'remote.lrc', size: 40, kind: 'lyric' },
+    { path: 'remote.png', size: 4000, kind: 'cover' },
+  ],
+}])
+
+console.log('\n== target 已有伴生文件：不传、不覆盖 ==')
+// 冲突 push：两端都有歌词，本地 jpg、对端 png（任意格式均为「已有封面」）
+const conflictLocal = indexWithSupport(file('both.flac', 500, 50), cover('both.flac', 'jpg', 5000))
+const conflictRemote = indexWithSupport(file('both.flac', 501, 51), cover('both.flac', 'png', 5100))
+const conflictPlan = buildPlan(conflictLocal, conflictRemote, [])
+const conflictItem = conflictPlan.conflict[0]
+check('两端都有歌词/封面（格式可不同）', [
+  conflictItem.localHasLyric,
+  conflictItem.remoteHasLyric,
+  conflictItem.localHasCover,
+  conflictItem.remoteHasCover,
+], [true, true, true, true])
+check('target 已有 → push 不传伴生', conflictItem.uploadSidecars, [])
+check('target 已有 → pull 不传伴生', conflictItem.downloadSidecars, [])
+const conflictPush = buildActions(conflictPlan, { [planSelectionKey('conflict', 'both.flac')]: true }, { [planSelectionKey('conflict', 'both.flac')]: 'push' })
+const conflictPull = buildActions(conflictPlan, { [planSelectionKey('conflict', 'both.flac')]: true }, { [planSelectionKey('conflict', 'both.flac')]: 'pull' })
+check('冲突 push 动作 sidecars 为空', conflictPush[0].sidecars, [])
+check('冲突 pull 动作 sidecars 为空', conflictPull[0].sidecars, [])
+
+console.log('\n== 旧对端（无 coverSupport）：跳过封面 ==')
+// 旧对端索引由 buildIndex 构造、无 coverSupport
+const oldRemoteNoLyric = indexOf(file('old.flac', 401))
+const localWithSidecars = indexWithSupport(file('old.flac', 400, 40), cover('old.flac', 'jpg', 4000))
+const uploadToOld = buildPlan(localWithSidecars, oldRemoteNoLyric, [])
+check('旧对端无 coverSupport → 不传封面、歌词照常', uploadToOld.conflict[0].uploadSidecars, [
+  { path: 'old.lrc', size: 40, kind: 'lyric' },
+])
+const oldRemoteWithCover = indexOf(file('old.flac', 400, 40), cover('old.flac', 'jpg', 4000))
+const downloadFromOld = buildPlan(indexWithSupport(file('old.flac', 500)), oldRemoteWithCover, [])
+check('旧对端无 coverSupport → 不下载封面、歌词照常', downloadFromOld.conflict[0].downloadSidecars, [
+  { path: 'old.lrc', size: 40, kind: 'lyric' },
+])
+const deleteOnOld = buildPlan(indexWithSupport(), oldRemoteWithCover, ['old.flac'])
+check('旧对端无 coverSupport → 不删对端封面', deleteOnOld.localDeleted[0].remoteSidecars, [
+  { path: 'old.lrc', size: 40, kind: 'lyric' },
+])
+const deleteOnNew = buildPlan(indexWithSupport(), indexWithSupport(file('old.flac', 400, 40), cover('old.flac', 'jpg', 4000)), ['old.flac'])
+check('新对端支持 coverSupport → 删除对端封面', deleteOnNew.localDeleted[0].remoteSidecars, [
+  { path: 'old.lrc', size: 40, kind: 'lyric' },
+  { path: 'old.jpg', size: 4000, kind: 'cover' },
+])
+check('target 已有歌词 → 不重复传歌词', buildPlan(
+  localWithSidecars,
+  indexWithSupport(file('old.flac', 401, 41)),
+  [],
+).conflict[0].uploadSidecars, [{ path: 'old.jpg', size: 4000, kind: 'cover' }])
+
+console.log('\n== 删除歌曲时逐个删除该侧 sidecar ==')
+const deleteLocalPlan = buildPlan(
+  indexWithSupport(file('gone.flac', 500, 50), cover('gone.flac', 'png', 5000)),
+  indexWithSupport(),
+  ['gone.flac'],
+)
+check('远端已删除 → 本地删除项带歌词+封面', deleteLocalPlan.remoteDeleted[0].localSidecars, [
+  { path: 'gone.lrc', size: 50, kind: 'lyric' },
+  { path: 'gone.png', size: 5000, kind: 'cover' },
+])
+const delLocalActions = buildActions(deleteLocalPlan, { [planSelectionKey('remoteDeleted', 'gone.flac')]: true }, {})
+check('delete_local 动作携带 sidecars', delLocalActions, [{
+  kind: 'delete_local',
+  path: 'gone.flac',
+  sidecars: [
+    { path: 'gone.lrc', size: 50, kind: 'lyric' },
+    { path: 'gone.png', size: 5000, kind: 'cover' },
+  ],
+}])
+const deleteRemotePlan = buildPlan(indexWithSupport(), indexWithSupport(file('gone.flac', 500, 50), cover('gone.flac', 'png', 5000)), ['gone.flac'])
+const delRemoteActions = buildActions(deleteRemotePlan, { [planSelectionKey('localDeleted', 'gone.flac')]: true }, {})
+check('delete_remote 动作携带 sidecars', delRemoteActions, [{
+  kind: 'delete_remote',
+  path: 'gone.flac',
+  sidecars: [
+    { path: 'gone.lrc', size: 50, kind: 'lyric' },
+    { path: 'gone.png', size: 5000, kind: 'cover' },
+  ],
+}])
 
 console.log('\n== 内容签名：发现「字节数相同但内容不同」 ==')
 check('取样范围: 大文件首尾各 4096', getSignatureRanges(100000), { headLength: 4096, tailOffset: 95904, tailLength: 4096 })

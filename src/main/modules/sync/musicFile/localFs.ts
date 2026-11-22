@@ -10,6 +10,7 @@ import {
   getRelDir,
   getSignatureRanges,
   isAudioFileName,
+  isCoverFileName,
   isLyricFileName,
   shortenRelPath,
   type FileIndex,
@@ -120,7 +121,7 @@ const readSignature = async(absPath: string, size: number): Promise<string | und
   }
 }
 
-/** 扫描 scope 内所有文件夹下的音频与歌词文件（返回原始条目，由 buildIndex 完成配对） */
+/** 扫描 scope 内所有文件夹下的音频、歌词与封面文件（返回原始条目，由 buildIndex 完成配对） */
 export const scanEntries = async(root: string, scope: readonly string[] = getScope()): Promise<ScanEntry[]> => {
   const entries: ScanEntry[] = []
   const walk = async(absDir: string, relDir: string, depth: number) => {
@@ -136,7 +137,7 @@ export const scanEntries = async(root: string, scope: readonly string[] = getSco
         continue
       }
       if (!dirent.isFile()) continue
-      if (!isAudioFileName(name) && !isLyricFileName(name)) continue
+      if (!isAudioFileName(name) && !isLyricFileName(name) && !isCoverFileName(name)) continue
       try {
         const absPath = path.join(absDir, name)
         const stat = await fsp.stat(absPath)
@@ -158,7 +159,8 @@ export const scanIndex = async(root: string, scope: readonly string[] = getScope
   if (!root) throw new Error('music file root is empty')
   log.info('scan', `root=${root} scope=${JSON.stringify(scope)}`)
   const entries = await scanEntries(root, scope)
-  const index = buildIndex(entries)
+  // buildIndex 保持纯函数（不含能力标记）；由扫描器声明本端支持封面索引
+  const index: FileIndex = { ...buildIndex(entries), coverSupport: true }
   log.info('scan', `done root=${root} entries=${entries.length} folders=${index.folders.length} files=${index.files.length}`)
   return index
 }
@@ -274,24 +276,30 @@ export const writeFileChunk = async(root: string, relPath: string, offset: numbe
 }
 
 /**
- * 删除文件；withLyric 为真时同时删除伴生 .lrc
+ * 删除单个文件（相对路径）。
  *
  * 磁盘上的名字可能是 NFD，且各段形式可混合，因此逐段解析；
  * 解析不到时再补一次「整条转 NFD」的兜底，避免留下残file。
+ * 落盘名与写入时一致做压限（`shortenRelPath`），保证长文件名也能删到。
+ */
+export const deleteFile = async(root: string, relPath: string) => {
+  const outRelPath = shortenRelPath(canonicalizeRelPath(relPath))
+  log.info('delete', `relPath=${outRelPath}`)
+  const resolved = await resolveExistingAbsPath(root, outRelPath)
+  if (resolved) await removeIfExists(resolved)
+  else {
+    await removeIfExists(toAbsPath(root, outRelPath))
+    await removeIfExists(toAbsPath(root, outRelPath.split('/').map(segment => segment.normalize('NFD')).join('/')))
+  }
+}
+
+/**
+ * 删除音频；withLyric 为真时同时删除伴生 .lrc（保留旧 RPC 语义）
  */
 export const deleteFileWithLyric = async(root: string, relPath: string, withLyric: boolean) => {
-  const outRelPath = shortenRelPath(canonicalizeRelPath(relPath))
-  log.info('delete', `relPath=${outRelPath} withLyric=${withLyric}`)
-  const targets = [outRelPath]
-  if (withLyric) targets.push(shortenRelPath(canonicalizeRelPath(getLyricRelPath(relPath))))
-  for (const target of targets) {
-    const resolved = await resolveExistingAbsPath(root, target)
-    if (resolved) await removeIfExists(resolved)
-    else {
-      await removeIfExists(toAbsPath(root, target))
-      await removeIfExists(toAbsPath(root, target.split('/').map(segment => segment.normalize('NFD')).join('/')))
-    }
-  }
+  log.info('delete', `relPath=${shortenRelPath(canonicalizeRelPath(relPath))} withLyric=${withLyric}`)
+  await deleteFile(root, relPath)
+  if (withLyric) await deleteFile(root, getLyricRelPath(relPath))
 }
 
 const removeIfExists = async(absPath: string) => {

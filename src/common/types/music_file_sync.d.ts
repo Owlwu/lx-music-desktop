@@ -10,6 +10,23 @@ declare namespace LX {
         mtime: number
       }
 
+      /** 同目录同名的封面（jpg 优先于 png） */
+      interface CoverItem {
+        format: 'jpg' | 'png'
+        size: number
+        mtime: number
+      }
+
+      /**
+       * 跟随歌曲传输/删除的伴生文件。
+       * `path` 是相对同步根目录的 POSIX 路径，落点由两端按同一规则从音频路径推导。
+       */
+      interface SidecarItem {
+        path: string
+        size: number
+        kind: 'lyric' | 'cover'
+      }
+
       interface FileItem {
         /** 相对同步根目录的路径，使用 `/` 分隔 */
         path: string
@@ -22,11 +39,18 @@ declare namespace LX {
         sig?: string
         /** 同目录同名的 .lrc，不存在时为 null */
         lyric: LyricItem | null
+        /** 同目录同名的 .jpg/.png（jpg 优先），不存在时为 null */
+        cover: CoverItem | null
       }
 
       interface FileIndex {
         folders: string[]
         files: FileItem[]
+        /**
+         * 本端扫描器是否支持封面索引（新版本恒为 true）。
+         * 旧对端没有该字段，发起端因此不传/不删对端封面，避免覆盖旧对端已有封面。
+         */
+        coverSupport?: boolean
       }
 
       type FileGroupKey = 'remoteAdded' | 'localAdded' | 'remoteDeleted' | 'localDeleted' | 'conflict'
@@ -40,6 +64,16 @@ declare namespace LX {
         remoteSize: number | null
         localHasLyric: boolean
         remoteHasLyric: boolean
+        localHasCover: boolean
+        remoteHasCover: boolean
+        /** 方向为 upload 时要顺带传的伴生文件（源本地有、对端没有；cover 需 remoteCoverSupport） */
+        uploadSidecars: SidecarItem[]
+        /** 方向为 download 时要顺带传的伴生文件（源对端有、本地没有；cover 需 remoteCoverSupport） */
+        downloadSidecars: SidecarItem[]
+        /** delete_local 时要删除的本地伴生文件 */
+        localSidecars: SidecarItem[]
+        /** delete_remote 时要删除的对端伴生文件（cover 需 remoteCoverSupport） */
+        remoteSidecars: SidecarItem[]
         defaultChecked: boolean
         defaultDirection: TransferDirection
         /** conflict 专用：true 表示两端字节数相同、只是内容不同（否则是大小不同） */

@@ -847,5 +847,6 @@
   "batch_match__count_failed": "실패 {failed}",
   "batch_match__count_skipped": "건너뜀 {skipped}",
   "batch_match__canceling": "취소 중…",
-  "batch_match__error": "채우기 실패, 잠시 후 다시 시도하세요"
+  "batch_match__error": "채우기 실패, 잠시 후 다시 시도하세요",
+  "setting__sync_music_file_has_cover": "커버 포함"
 }

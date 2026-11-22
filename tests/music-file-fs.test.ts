@@ -83,9 +83,10 @@ const writeFile = (root: string, relPath: string, size: number, fill = 0) => {
 }
 
 console.log('\n== 准备两端测试目录 ==')
-// PC 端：两首歌（其中一首带歌词）、一首深层子目录里的歌、一个非音频文件
+// PC 端：两首歌（其中一首带歌词+封面）、一首深层子目录里的歌、一个非音频文件
 writeFile(rootA, '歌手A/alpha.flac', 500_000, 1)
 writeFile(rootA, '歌手A/alpha.lrc', 120, 2)
+writeFile(rootA, '歌手A/alpha.jpg', 1200, 6)
 writeFile(rootA, '歌手A/beta.flac', 40_000, 3)
 writeFile(rootA, 'Yunomi/专辑/ghost.ogg', 30_000, 4)
 writeFile(rootA, 'notes.txt', 10, 9)
@@ -93,6 +94,8 @@ writeFile(rootA, 'notes.txt', 10, 9)
 // Android 端：只同步过去了一部分（alpha 一致），另有本地独有
 writeFile(rootB, '歌手A/alpha.flac', 500_000, 1)
 writeFile(rootB, '歌手A/alpha.lrc', 120, 2)
+// 同为 alpha 封面但格式不同：两端都视为「已有封面」，不互相覆盖
+writeFile(rootB, '歌手A/alpha.png', 1300, 8)
 writeFile(rootB, 'Yunomi/专辑/ghost.ogg', 30_000, 4)
 // 大于分片大小，用于验证分片传输
 writeFile(rootB, '歌手B/android-only.mp3', 460_000, 5)
@@ -105,9 +108,14 @@ const indexB = await localFs.scanIndex(rootB, scopeAll)
 console.log('\n== 扫描结果 ==')
 check('PC 索引只含音频', indexA.files.map((f: any) => f.path), ['Yunomi/专辑/ghost.ogg', '歌手A/alpha.flac', '歌手A/beta.flac'])
 check('PC 歌词被正确挂载', indexA.files.find((f: any) => f.path === '歌手A/alpha.flac').lyric.size, 120)
+const alphaCoverA = indexA.files.find((f: any) => f.path === '歌手A/alpha.flac').cover
+check('PC 封面被正确挂载（jpg）', { format: alphaCoverA?.format, size: alphaCoverA?.size }, { format: 'jpg', size: 1200 })
 check('PC 无歌词的歌曲为 null', indexA.files.find((f: any) => f.path === '歌手A/beta.flac').lyric, null)
+check('PC 无封面的歌曲为 null', indexA.files.find((f: any) => f.path === '歌手A/beta.flac').cover, null)
+check('PC 扫描器声明 coverSupport', indexA.coverSupport, true)
 check('PC 文件夹列表含所有层级', indexA.folders, ['Yunomi', 'Yunomi/专辑', '歌手A'])
 check('Android 索引', indexB.files.map((f: any) => f.path), ['Yunomi/专辑/ghost.ogg', '歌手A/alpha.flac', '歌手A/beta.flac', '歌手B/android-only.mp3'])
+check('Android 同一首歌的 png 封面也被挂载', indexB.files.find((f: any) => f.path === '歌手A/alpha.flac').cover?.format, 'png')
 
 console.log('\n== scope 精确到文件夹 ==')
 const indexScopedA = await localFs.scanIndex(rootA, ['Yunomi/专辑'])
@@ -138,8 +146,8 @@ const selected = {
 }
 const actions = diff.buildActions(plan, selected.checked, selected.direction)
 check('生成的动作', actions, [
-  { kind: 'download', path: '歌手B/android-only.mp3', size: 460_000, hasLyric: false },
-  { kind: 'download', path: '歌手A/beta.flac', size: 51_200, hasLyric: false },
+  { kind: 'download', path: '歌手B/android-only.mp3', size: 460_000, sidecars: [] },
+  { kind: 'download', path: '歌手A/beta.flac', size: 51_200, sidecars: [] },
 ])
 
 // 以 localFs 作为「对端」，模拟协议中的 read_file / write_file / delete_file
@@ -158,8 +166,7 @@ const peer = {
 const CHUNK = diff.MUSIC_FILE_CHUNK_SIZE
 let chunkCount = 0
 const runAction = async(action: any) => {
-  const targets = [action.path]
-  if (action.hasLyric) targets.push(diff.getLyricRelPath(action.path))
+  const targets = diff.getActionTargets(action)
   for (const target of targets) {
     if (action.kind === 'download') {
       let offset = 0
@@ -196,34 +203,94 @@ check('远端新增已下载到 PC 且内容一致', fs.readFileSync(path.join(r
 check('冲突项按默认方向（远端覆盖本地）', fs.readFileSync(path.join(rootA, '歌手A/beta.flac')).equals(fs.readFileSync(path.join(rootB, '歌手A/beta.flac'))), true)
 check('未勾选的本地新增没有上传到远端', fs.existsSync(path.join(rootB, '歌手A/alpha.lrc')), true)
 
-console.log('\n== 上传与删除（含歌词） ==')
+console.log('\n== 上传与删除（含歌词+封面） ==')
 writeFile(rootA, '歌手A/gamma.flac', 12_000, 11)
 writeFile(rootA, '歌手A/gamma.lrc', 90, 12)
+writeFile(rootA, '歌手A/gamma.png', 700, 13)
 const indexA2 = await localFs.scanIndex(rootA, scopeAll)
-check('PC 新增 gamma（含歌词）', indexA2.files.find((f: any) => f.path === '歌手A/gamma.flac').lyric.size, 90)
+check('PC 新增 gamma（含歌词+封面）', [
+  indexA2.files.find((f: any) => f.path === '歌手A/gamma.flac').lyric.size,
+  indexA2.files.find((f: any) => f.path === '歌手A/gamma.flac').cover?.format,
+], [90, 'png'])
 
 const uploadActions = diff.buildActions(
-  { ...diff.buildPlan(indexA2, await localFs.scanIndex(rootB, scopeAll), ['歌手A/alpha.flac']), remoteAdded: [], localAdded: [{ group: 'localAdded', path: '歌手A/gamma.flac', localSize: 12_000, remoteSize: null, localHasLyric: true, remoteHasLyric: false, defaultChecked: true, defaultDirection: 'push' }], remoteDeleted: [], localDeleted: [], conflict: [] },
+  {
+    ...diff.buildPlan(indexA2, await localFs.scanIndex(rootB, scopeAll), ['歌手A/alpha.flac']),
+    remoteAdded: [],
+    localAdded: [{
+      group: 'localAdded',
+      path: '歌手A/gamma.flac',
+      localSize: 12_000,
+      remoteSize: null,
+      localHasLyric: true,
+      remoteHasLyric: false,
+      localHasCover: true,
+      remoteHasCover: false,
+      uploadSidecars: [
+        { path: '歌手A/gamma.lrc', size: 90, kind: 'lyric' },
+        { path: '歌手A/gamma.png', size: 700, kind: 'cover' },
+      ],
+      downloadSidecars: [],
+      localSidecars: [
+        { path: '歌手A/gamma.lrc', size: 90, kind: 'lyric' },
+        { path: '歌手A/gamma.png', size: 700, kind: 'cover' },
+      ],
+      remoteSidecars: [],
+      defaultChecked: true,
+      defaultDirection: 'push',
+    }],
+    remoteDeleted: [],
+    localDeleted: [],
+    conflict: [],
+  },
   { 'localAdded:歌手A/gamma.flac': true },
   {},
 )
-check('上传动作带歌词', uploadActions, [{ kind: 'upload', path: '歌手A/gamma.flac', size: 12_000, hasLyric: true }])
+check('上传动作带歌词+封面 sidecars', uploadActions, [{
+  kind: 'upload',
+  path: '歌手A/gamma.flac',
+  size: 12_000,
+  sidecars: [
+    { path: '歌手A/gamma.lrc', size: 90, kind: 'lyric' },
+    { path: '歌手A/gamma.png', size: 700, kind: 'cover' },
+  ],
+}])
 for (const action of uploadActions) await runAction(action)
-check('歌曲与歌词都上传到远端', [
+check('歌曲与歌词、封面都上传到远端', [
   fs.existsSync(path.join(rootB, '歌手A/gamma.flac')),
   fs.existsSync(path.join(rootB, '歌手A/gamma.lrc')),
+  fs.existsSync(path.join(rootB, '歌手A/gamma.png')),
+], [true, true, true])
+check('上传内容一致', [
+  fs.readFileSync(path.join(rootA, '歌手A/gamma.lrc')).equals(fs.readFileSync(path.join(rootB, '歌手A/gamma.lrc'))),
+  fs.readFileSync(path.join(rootA, '歌手A/gamma.png')).equals(fs.readFileSync(path.join(rootB, '歌手A/gamma.png'))),
 ], [true, true])
-check('上传内容一致', fs.readFileSync(path.join(rootA, '歌手A/gamma.lrc')).equals(fs.readFileSync(path.join(rootB, '歌手A/gamma.lrc'))), true)
 
-// 删除：把上传过去的歌曲在两端都删掉，验证本地删除与远端删除都带上伴生歌词
-await runAction({ kind: 'delete_local', path: '歌手A/gamma.flac', hasLyric: true })
-await runAction({ kind: 'delete_remote', path: '歌手A/gamma.flac', hasLyric: true })
-check('删除歌曲同时删除两端伴生歌词', [
+// 删除：把上传过去的歌曲在两端都删掉，验证本地/远端删除都逐个删除伴生歌词+封面
+await runAction({
+  kind: 'delete_local',
+  path: '歌手A/gamma.flac',
+  sidecars: [
+    { path: '歌手A/gamma.lrc', size: 90, kind: 'lyric' },
+    { path: '歌手A/gamma.png', size: 700, kind: 'cover' },
+  ],
+})
+await runAction({
+  kind: 'delete_remote',
+  path: '歌手A/gamma.flac',
+  sidecars: [
+    { path: '歌手A/gamma.lrc', size: 90, kind: 'lyric' },
+    { path: '歌手A/gamma.png', size: 700, kind: 'cover' },
+  ],
+})
+check('删除歌曲同时删除两端伴生歌词与封面', [
   fs.existsSync(path.join(rootA, '歌手A/gamma.flac')),
   fs.existsSync(path.join(rootA, '歌手A/gamma.lrc')),
+  fs.existsSync(path.join(rootA, '歌手A/gamma.png')),
   fs.existsSync(path.join(rootB, '歌手A/gamma.flac')),
   fs.existsSync(path.join(rootB, '歌手A/gamma.lrc')),
-], [false, false, false, false])
+  fs.existsSync(path.join(rootB, '歌手A/gamma.png')),
+], [false, false, false, false, false, false])
 
 console.log('\n== 基线更新后不再重复提示 ==')
 const finalA = await localFs.scanIndex(rootA, scopeAll)

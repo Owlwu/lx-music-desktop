@@ -3,6 +3,7 @@ import {
   buildActions,
   buildBaseline,
   buildPlan,
+  getActionTargets,
   MUSIC_FILE_CHUNK_SIZE,
   normalizeScope,
   type TransferAction,
@@ -118,16 +119,16 @@ const transferUploadFile = async(peer: MusicFilePeer, root: string, relPath: str
   log.info('transfer', `upload done relPath=${relPath} bytes=${offset}`)
 }
 
-const lyricRelPath = (relPath: string) => {
-  const index = relPath.lastIndexOf('.')
-  return (index > 0 ? relPath.substring(0, index) : relPath) + '.lrc'
-}
-
-/** 按相对路径索引伴生歌词的大小，用于把歌词算进进度总量 */
-const buildLyricSizeMap = (index: LX.Sync.MusicFile.FileIndex) => {
-  const map = new Map<string, number>()
-  for (const file of index.files) map.set(file.path, file.lyric?.size ?? 0)
-  return map
+/**
+ * 全部动作的总字节数：音频 size + 每个伴生文件 size。
+ * 删除动作不产生字节数（`sidecars` 不计入）。
+ */
+export const sumActionBytes = (actions: readonly TransferAction[]): number => {
+  return actions.reduce((sum, action) => {
+    if (action.kind !== 'download' && action.kind !== 'upload') return sum
+    const sidecarBytes = action.sidecars.reduce((total, item) => total + item.size, 0)
+    return sum + action.size + sidecarBytes
+  }, 0)
 }
 
 /** 执行用户在清单中勾选的传输动作 */
@@ -146,14 +147,8 @@ export const apply = async(selection: LX.Sync.MusicFile.Selection): Promise<LX.S
     log.info('apply', `remote(${describeSide(remoteRoot, scope)}) folders=${remoteIndex.folders.length} files=${remoteIndex.files.length}`)
     const plan = buildPlan(localIndex, remoteIndex, await loadBaseline())
     const actions = buildActions(plan, selection.checked, selection.direction)
-    log.info('apply', `actions=${actions.length} ${JSON.stringify(actions.map(a => `${a.kind}:${a.path}`).slice(0, 200))}`)
-    const localLyricSizes = buildLyricSizeMap(localIndex)
-    const remoteLyricSizes = buildLyricSizeMap(remoteIndex)
-    const totalBytes = actions.reduce((sum, action) => {
-      if (!('size' in action)) return sum
-      const lyricSizes = action.kind === 'download' ? remoteLyricSizes : localLyricSizes
-      return sum + action.size + (action.hasLyric ? lyricSizes.get(action.path) ?? 0 : 0)
-    }, 0)
+    log.info('apply', `actions=${actions.length} ${JSON.stringify(actions.map(a => `${a.kind}:${a.path}+${a.sidecars.length}`).slice(0, 200))}`)
+    const totalBytes = sumActionBytes(actions)
 
     let doneBytes = 0
     updateProgress({
@@ -167,11 +162,8 @@ export const apply = async(selection: LX.Sync.MusicFile.Selection): Promise<LX.S
       message: '',
     })
 
-    const targetsOf = (action: TransferAction) => {
-      const list = [action.path]
-      if (action.hasLyric) list.push(lyricRelPath(action.path))
-      return list
-    }
+    /** 一个动作实际要处理的目标路径：音频 + 伴生歌词/封面 */
+    const targetsOf = (action: TransferAction) => getActionTargets(action)
 
     for (let index = 0; index < actions.length; index++) {
       const action = actions[index]
@@ -197,11 +189,13 @@ export const apply = async(selection: LX.Sync.MusicFile.Selection): Promise<LX.S
             result.uploaded++
             break
           case 'delete_local':
-            await localFs.deleteFileWithLyric(root, action.path, action.hasLyric)
+            // 音频 + 该侧实际存在的伴生文件，逐个删除
+            for (const target of targetsOf(action)) await localFs.deleteFile(root, target)
             result.deletedLocal++
             break
           case 'delete_remote':
-            await peer.musicFile_delete_file(action.path, action.hasLyric)
+            // 不改 RPC 签名：对音频与每个伴生文件分别调用 delete_file(path, false)
+            for (const target of targetsOf(action)) await peer.musicFile_delete_file(target, false)
             result.deletedRemote++
             break
         }
