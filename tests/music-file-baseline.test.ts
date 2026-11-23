@@ -101,7 +101,7 @@ const keyOk = JSON.stringify({ version: 1, ...baselineKey, paths: ['a.flac'] })
 check('同设备同根目录可读', parseBaseline(keyOk, baselineKey), ['a.flac'])
 check('换设备按首次同步', parseBaseline(JSON.stringify({ version: 1, deviceName: 'other', remoteRoot: baselineKey.remoteRoot, paths: ['a.flac'] }), baselineKey), [])
 check('换根目录按首次同步', parseBaseline(JSON.stringify({ version: 1, deviceName: baselineKey.deviceName, remoteRoot: '/other', paths: ['a.flac'] }), baselineKey), [])
-check('旧版裸数组按首次同步', parseBaseline(JSON.stringify(['a.flac']), baselineKey), [])
+check('旧版裸数组沿用一次（避免升级后删除变新增）', parseBaseline(JSON.stringify(['a.flac']), baselineKey), ['a.flac'])
 check('坏 JSON 不抛错', parseBaseline('{', baselineKey), [])
 
 void (async() => {
