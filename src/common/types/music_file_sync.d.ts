@@ -117,6 +117,8 @@ declare namespace LX {
         plan: PlanGroups
         localRoot: string
         remoteRoot: string
+        /** 旧版基线迁移后的提示文案；有值时本次清单不做默认勾选 */
+        notice?: string
       }
 
       type ProgressStage = 'idle' | 'comparing' | 'transferring' | 'finishing' | 'done' | 'error'

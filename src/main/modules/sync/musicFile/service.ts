@@ -7,10 +7,13 @@ import {
   getActionTargets,
   MUSIC_FILE_CHUNK_SIZE,
   normalizeScope,
+  seedBaselineFromLegacy,
+  type BaselineKey,
+  type FileIndex,
   type TransferAction,
 } from './diff'
 import * as localFs from './localFs'
-import { loadBaseline, saveBaseline } from './baseline'
+import { backupBaselineFile, loadBaselineState, saveBaseline } from './baseline'
 import { getPeerRef, type MusicFilePeer } from './peer'
 import { CANCELLED_MESSAGE, CancelledError, runActions } from './executor'
 import log from './logger'
@@ -22,7 +25,23 @@ const describeSide = (root: string, scope: readonly string[]) => `root=${root} s
  * 基线绑定「对端配对 + 两端根目录」。
  * 本地根目录必须参与：换到空目录后如果沿用旧基线，对端仍有的文件会被判成「删除对端」。
  */
-const getBaselineKey = (localRoot: string, remoteRoot: string, pairId: string) => ({ pairId, localRoot, remoteRoot })
+const getBaselineKey = (localRoot: string, remoteRoot: string, pairId: string): BaselineKey => ({ pairId, localRoot, remoteRoot })
+
+const LEGACY_BASELINE_NOTICE = '检测到旧版同步基线，无法确认它属于哪台设备或哪个目录；已按两端当前都存在的文件重建基线。本次清单不做默认勾选，请复核后再同步。'
+
+/**
+ * 读取当前组合的基线；旧格式先做一次性迁移：
+ * 只保留两端当前都存在的路径，避免旧目录的记忆把当前目录里对端仍有的文件判成删除。
+ */
+const loadBaselineFor = async(localIndex: FileIndex, remoteIndex: FileIndex, key: BaselineKey) => {
+  const state = await loadBaselineState(key)
+  if (!state.legacy) return { baseline: state.paths, migrated: false }
+  const seeded = seedBaselineFromLegacy(state.paths, localIndex, remoteIndex)
+  await backupBaselineFile()
+  await saveBaseline(key, seeded)
+  log.info('baseline', `legacy migrated pair=${key.pairId} raw=${state.paths.length} seeded=${seeded.length}`)
+  return { baseline: seeded, migrated: true }
+}
 
 const createProgress = (): LX.Sync.MusicFile.Progress => ({
   running: false,
@@ -85,10 +104,16 @@ export const compare = async(): Promise<LX.Sync.MusicFile.CompareResult> => {
     if (!remoteRoot) throw new Error('对端未设置同步歌曲存放路径')
     const remoteIndex = await peer.musicFile_get_index(scope)
     log.info('compare', `remote(${describeSide(remoteRoot, scope)}) folders=${remoteIndex.folders.length} files=${remoteIndex.files.length}`)
-    const baseline = await loadBaseline(getBaselineKey(root, remoteRoot, pairId))
+    const { baseline, migrated } = await loadBaselineFor(localIndex, remoteIndex, getBaselineKey(root, remoteRoot, pairId))
     const plan = buildPlan(localIndex, remoteIndex, baseline)
+    if (migrated) {
+      // 旧基线无法确认归属：本次不做默认勾选，要求用户逐项复核，避免静默改变操作方向
+      for (const items of Object.values(plan)) {
+        for (const item of items) item.defaultChecked = false
+      }
+    }
     log.info('compare', `plan ${JSON.stringify(Object.fromEntries(Object.entries(plan).map(([k, v]) => [k, v.length])))} baseline=${baseline.length} localFiles=${localIndex.files.length} remoteFiles=${remoteIndex.files.length}`)
-    return { plan, localRoot: root, remoteRoot }
+    return { plan, localRoot: root, remoteRoot, notice: migrated ? LEGACY_BASELINE_NOTICE : undefined }
   } finally {
     running = false
     updateProgress({ ...createProgress(), stage: 'idle', message: '' })
@@ -154,7 +179,7 @@ export const apply = async(selection: LX.Sync.MusicFile.Selection): Promise<LX.S
     const remoteIndex = await peer.musicFile_get_index(scope)
     log.info('apply', `remote(${describeSide(remoteRoot, scope)}) folders=${remoteIndex.folders.length} files=${remoteIndex.files.length}`)
     const baselineKey = getBaselineKey(root, remoteRoot, pairId)
-    const baseline = await loadBaseline(baselineKey)
+    const { baseline } = await loadBaselineFor(localIndex, remoteIndex, baselineKey)
     const plan = buildPlan(localIndex, remoteIndex, baseline)
     const actions = buildActions(plan, selection.checked, selection.direction)
     log.info('apply', `actions=${actions.length} ${JSON.stringify(actions.map(a => `${a.kind}:${a.path}+${a.sidecars.length}`).slice(0, 200))}`)

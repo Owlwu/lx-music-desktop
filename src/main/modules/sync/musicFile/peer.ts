@@ -59,9 +59,11 @@ export const getPeerRef = (): MusicFilePeerRef | null => {
   const socket = getSocket()
   if (!socket?.isReady || !socket.moduleReadys?.musicFile) return null
   const { serverName } = socket.data.keyInfo
+  const serverId = socket.data.serverId ?? ''
   return {
     peer: socket.remote,
-    pairId: `server:${serverName}@${socket.data.urlInfo.hostPath}`,
+    // 认证时拿到的 serverId 是服务端持久 ID，换 IP 或改成同名服务器都不会串基线
+    pairId: serverId ? `server:${serverId}` : `server:${serverName}@${socket.data.urlInfo.hostPath}`,
     deviceName: serverName,
   }
 }

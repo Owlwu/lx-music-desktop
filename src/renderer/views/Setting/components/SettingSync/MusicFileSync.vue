@@ -17,6 +17,7 @@ dd#sync_music_file
       base-btn.btn(min :disabled="!canOperate || busy || progress.running" @click="handleCompare") {{ $t('setting__sync_music_file_compare') }}
       base-btn.btn(min :disabled="!plan || progress.running" @click="handleApply") {{ $t('setting__sync_music_file_apply') }}
       base-btn.btn(v-if="progress.running" min @click="handleCancel") {{ $t('setting__sync_music_file_cancel') }}
+    p.small(v-if="noticeText" :class="$style.notice") {{ noticeText }}
     p.small(v-if="errorText" :class="$style.error") {{ errorText }}
     div(v-if="progress.running || progress.message" :class="$style.progress")
       p.small {{ progressText }}
@@ -115,6 +116,7 @@ export default {
     const remoteRoot = ref('')
     const busy = ref(false)
     const errorText = ref('')
+    const noticeText = ref('')
     const selection = reactive({
       checked: {},
       direction: {},
@@ -189,6 +191,7 @@ export default {
       remoteRoot.value = ''
       selection.checked = {}
       selection.direction = {}
+      noticeText.value = ''
     }
 
     const initSelection = (groups) => {
@@ -378,6 +381,7 @@ export default {
         const result = await musicFileCompare()
         plan.value = result.plan
         remoteRoot.value = result.remoteRoot
+        noticeText.value = result.notice ?? ''
         initSelection(result.plan)
       } catch (err) {
         errorText.value = err?.message ?? String(err)
@@ -388,6 +392,7 @@ export default {
 
     const handleApply = async() => {
       errorText.value = ''
+      noticeText.value = ''
       const value = {
         checked: { ...selection.checked },
         direction: { ...selection.direction },
@@ -481,6 +486,12 @@ export default {
   color: var(--color-error, #e74c3c);
   white-space: pre-wrap;
   word-break: break-all;
+  margin-top: 8px;
+}
+
+.notice {
+  color: var(--color-warning, #e6a23c);
+  white-space: pre-wrap;
   margin-top: 8px;
 }
 

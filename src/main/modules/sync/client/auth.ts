@@ -90,5 +90,7 @@ export default async(urlInfo: LX.Sync.Client.UrlInfo, authCode?: string) => {
   if (!await hello(urlInfo)) throw new Error(SYNC_CODE.connectServiceFailed)
   const serverId = await getServerId(urlInfo)
   if (!serverId) throw new Error(SYNC_CODE.getServiceIdFailed)
-  return auth(urlInfo, serverId, authCode)
+  const keyInfo = await auth(urlInfo, serverId, authCode)
+  // serverId 是服务端持久化的配对 ID，随连接一起留给基线使用，避免用地址/名字判断对端
+  return { keyInfo, serverId }
 }

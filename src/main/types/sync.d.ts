@@ -12,6 +12,8 @@ declare global {
           data: {
             keyInfo: ClientKeyInfo
             urlInfo: UrlInfo
+            /** 认证时从服务端 /id 取得的持久配对 ID；用于稳定标识对端 */
+            serverId?: string
           }
           moduleReadys: {
             list: boolean

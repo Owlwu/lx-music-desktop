@@ -84,7 +84,7 @@ const heartbeatTools = {
         status: false,
         message: `Try reconnnect... (${this.failedNum})`,
       })
-      connect(client.data.urlInfo, client.data.keyInfo)
+      connect(client.data.urlInfo, client.data.keyInfo, client.data.serverId)
     }, waitTime)
   },
   clearTimeout() {
@@ -149,13 +149,14 @@ const heartbeatTools = {
 
 let client: LX.Sync.Client.Socket | null
 // let listSyncPromise: Promise<void>
-export const connect = (urlInfo: LX.Sync.Client.UrlInfo, keyInfo: LX.Sync.ClientKeyInfo) => {
+export const connect = (urlInfo: LX.Sync.Client.UrlInfo, keyInfo: LX.Sync.ClientKeyInfo, serverId?: string) => {
   client = new WebSocket(`${urlInfo.wsProtocol}//${urlInfo.hostPath}/socket?i=${encodeURIComponent(keyInfo.clientId)}&t=${encodeURIComponent(aesEncrypt(SYNC_CODE.msgConnect, keyInfo.key))}`, {
     followRedirects: true,
   }) as LX.Sync.Client.Socket
   client.data = {
     keyInfo,
     urlInfo,
+    serverId,
   }
   heartbeatTools.connect(client)
 

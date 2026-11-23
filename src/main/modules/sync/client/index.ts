@@ -16,9 +16,9 @@ const handleConnect = async(host: string, authCode?: string) => {
   const urlInfo = parseUrl(host)
   await disconnectServer(false)
   if (id != connectId) return
-  const keyInfo = await handleAuth(urlInfo, authCode)
+  const { keyInfo, serverId } = await handleAuth(urlInfo, authCode)
   if (id != connectId) return
-  socketConnect(urlInfo, keyInfo)
+  socketConnect(urlInfo, keyInfo, serverId)
 }
 const handleDisconnect = async() => {
   await socketDisconnect()

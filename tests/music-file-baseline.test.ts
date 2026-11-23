@@ -10,7 +10,10 @@ import {
   buildPlan,
   computeNextBaseline,
   getActionTargets,
+  mergeBaselineEntries,
   parseBaseline,
+  parseBaselineState,
+  seedBaselineFromLegacy,
   type FileIndex,
   type ScanEntry,
   type SidecarItem,
@@ -96,18 +99,37 @@ check(
   ['a.flac', 'b.flac'],
 )
 
-console.log('\n== 基线文件键控 ==')
-const keyOk = JSON.stringify({ version: 2, ...baselineKey, paths: ['a.flac'] })
-check('同配对同根目录可读', parseBaseline(keyOk, baselineKey), ['a.flac'])
-check('换配对按首次同步', parseBaseline(JSON.stringify({ version: 2, ...baselineKey, pairId: 'client:other', paths: ['a.flac'] }), baselineKey), [])
-check('换本地根目录按首次同步', parseBaseline(JSON.stringify({ version: 2, ...baselineKey, localRoot: 'E:/Music', paths: ['a.flac'] }), baselineKey), [])
-check('换对端根目录按首次同步', parseBaseline(JSON.stringify({ version: 2, ...baselineKey, remoteRoot: '/other', paths: ['a.flac'] }), baselineKey), [])
-check('旧版裸数组沿用一次（避免升级后删除变新增）', parseBaseline(JSON.stringify(['a.flac']), baselineKey), ['a.flac'])
-check('坏 JSON 不抛错', parseBaseline('{', baselineKey), [])
+console.log('\n== 基线文件键控与旧数据迁移 ==')
+const v3 = (entries: unknown[]) => JSON.stringify({ version: 3, entries })
+const entryFor = (key: typeof baselineKey, paths: string[], updatedAt = 1) => ({ ...key, updatedAt, paths })
+check('同配对同根目录可读', parseBaseline(v3([entryFor(baselineKey, ['a.flac'])]), baselineKey), ['a.flac'])
+check('换配对按首次同步', parseBaseline(v3([entryFor({ ...baselineKey, pairId: 'client:other' }, ['a.flac'])]), baselineKey), [])
+check('换本地根目录按首次同步', parseBaseline(v3([entryFor({ ...baselineKey, localRoot: 'E:/Music' }, ['a.flac'])]), baselineKey), [])
+check('换对端根目录按首次同步', parseBaseline(v3([entryFor({ ...baselineKey, remoteRoot: '/other' }, ['a.flac'])]), baselineKey), [])
 
-// 换到空目录：旧基线不命中 → 对端仍有的歌曲应列为可下载，而不是删除对端
-const switchedBaseline = parseBaseline(JSON.stringify({ version: 2, ...baselineKey, paths: ['song.flac'] }), { ...baselineKey, localRoot: 'E:/NewMusic' })
-check('换本地根目录后对端歌曲按新增', buildPlan(indexOf(), indexOf(audio('song.flac')), switchedBaseline).remoteAdded.map(item => item.path), ['song.flac'])
+check('裸数组标记为 legacy 并保留路径', parseBaselineState(JSON.stringify(['a.flac']), baselineKey), { paths: ['a.flac'], legacy: true })
+check('v2 单条基线标记为 legacy', parseBaselineState(JSON.stringify({ version: 2, ...baselineKey, paths: ['a.flac'] }), baselineKey), { paths: ['a.flac'], legacy: true })
+check('v3 命中不算 legacy', parseBaselineState(v3([entryFor(baselineKey, ['a.flac'])]), baselineKey), { paths: ['a.flac'], legacy: false })
+check('坏 JSON 标记为 legacy 且为空', parseBaselineState('{', baselineKey), { paths: [], legacy: true })
+
+// 旧基线迁移：只保留当前两端都存在的路径，避免旧目录记忆把对端文件判成删除
+const bothSides = indexOf(audio('keep.flac'))
+const legacySeeded = seedBaselineFromLegacy(['keep.flac', 'song.flac'], bothSides, bothSides)
+check('迁移保留两端都存在的路径', legacySeeded, ['keep.flac'])
+const emptySeeded = seedBaselineFromLegacy(['song.flac'], indexOf(), indexOf(audio('song.flac')))
+check('换到空目录后迁移结果为空', emptySeeded, [])
+check('迁移后对端歌曲按新增下载', buildPlan(indexOf(), indexOf(audio('song.flac')), emptySeeded).remoteAdded.map(item => item.path), ['song.flac'])
+check('迁移后两端都有的歌仍算已同步', buildPlan(bothSides, bothSides, legacySeeded).localAdded.length + buildPlan(bothSides, bothSides, legacySeeded).remoteDeleted.length, 0)
+
+// A → B → A：每个组合单独保存，切回 A 不会丢掉 A 的基线
+const keyA = { ...baselineKey }
+const keyB = { ...baselineKey, localRoot: 'E:/MusicB' }
+let mergedEntries = mergeBaselineEntries([], keyA, ['a.flac'], 1000)
+mergedEntries = mergeBaselineEntries(mergedEntries, keyB, ['b.flac'], 2000)
+const mergedRaw = v3(mergedEntries)
+check('B 同步后 A 的基线仍在', parseBaseline(mergedRaw, keyA), ['a.flac'])
+check('B 组合单独保存', parseBaseline(mergedRaw, keyB), ['b.flac'])
+check('切回 A 仍能识别已同步歌曲被删除', buildPlan(indexOf(audio('a.flac')), indexOf(), parseBaseline(mergedRaw, keyA)).remoteDeleted.map(item => item.path), ['a.flac'])
 
 void (async() => {
   console.log('\n== 动作编排 ==')
