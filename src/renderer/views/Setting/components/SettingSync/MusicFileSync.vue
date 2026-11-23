@@ -427,6 +427,7 @@ export default {
       remoteRoot,
       busy,
       errorText,
+      noticeText,
       selection,
       progress,
       canOperate,

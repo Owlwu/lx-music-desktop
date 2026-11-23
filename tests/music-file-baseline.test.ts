@@ -12,6 +12,7 @@ import {
   getActionTargets,
   mergeBaselineEntries,
   parseBaseline,
+  parseBaselineEntries,
   parseBaselineState,
   seedBaselineFromLegacy,
   type FileIndex,
@@ -107,10 +108,18 @@ check('换配对按首次同步', parseBaseline(v3([entryFor({ ...baselineKey, p
 check('换本地根目录按首次同步', parseBaseline(v3([entryFor({ ...baselineKey, localRoot: 'E:/Music' }, ['a.flac'])]), baselineKey), [])
 check('换对端根目录按首次同步', parseBaseline(v3([entryFor({ ...baselineKey, remoteRoot: '/other' }, ['a.flac'])]), baselineKey), [])
 
-check('裸数组标记为 legacy 并保留路径', parseBaselineState(JSON.stringify(['a.flac']), baselineKey), { paths: ['a.flac'], legacy: true })
-check('v2 单条基线标记为 legacy', parseBaselineState(JSON.stringify({ version: 2, ...baselineKey, paths: ['a.flac'] }), baselineKey), { paths: ['a.flac'], legacy: true })
-check('v3 命中不算 legacy', parseBaselineState(v3([entryFor(baselineKey, ['a.flac'])]), baselineKey), { paths: ['a.flac'], legacy: false })
-check('坏 JSON 标记为 legacy 且为空', parseBaselineState('{', baselineKey), { paths: [], legacy: true })
+check('裸数组标记为 legacy 并保留路径', parseBaselineState(JSON.stringify(['a.flac']), baselineKey), { status: 'legacy', paths: ['a.flac'] })
+check('v2 单条基线标记为 legacy', parseBaselineState(JSON.stringify({ version: 2, ...baselineKey, paths: ['a.flac'] }), baselineKey), { status: 'legacy', paths: ['a.flac'] })
+check('v3 命中为 ok', parseBaselineState(v3([entryFor(baselineKey, ['a.flac'])]), baselineKey), { status: 'ok', paths: ['a.flac'] })
+check('v3 其他组合存在但当前组合缺失为 ok 空', parseBaselineState(v3([entryFor({ ...baselineKey, pairId: 'client:other' }, ['x.flac'])]), baselineKey), { status: 'ok', paths: [] })
+check('坏 JSON 为 corrupt', parseBaselineState('{', baselineKey), { status: 'corrupt', paths: [] })
+check('零字节文件为 corrupt', parseBaselineState('', baselineKey), { status: 'corrupt', paths: [] })
+check('v3 缺 entries 为 corrupt', parseBaselineState(JSON.stringify({ version: 3 }), baselineKey), { status: 'corrupt', paths: [] })
+check('当前条目 paths 损坏为 corrupt', parseBaselineState(v3([{ ...baselineKey, updatedAt: 1, paths: 'bad' }]), baselineKey), { status: 'corrupt', paths: [] })
+check('当前条目损坏时保留其他有效组合', parseBaselineEntries(v3([{ ...baselineKey, updatedAt: 1, paths: 'bad' }, entryFor({ ...baselineKey, localRoot: 'E:/MusicB' }, ['b.flac'])])).map(item => item.paths), [['b.flac']])
+
+const keyA = { ...baselineKey }
+const keyB = { ...baselineKey, localRoot: 'E:/MusicB' }
 
 // 旧基线迁移：只保留当前两端都存在的路径，避免旧目录记忆把对端文件判成删除
 const bothSides = indexOf(audio('keep.flac'))
@@ -121,9 +130,14 @@ check('换到空目录后迁移结果为空', emptySeeded, [])
 check('迁移后对端歌曲按新增下载', buildPlan(indexOf(), indexOf(audio('song.flac')), emptySeeded).remoteAdded.map(item => item.path), ['song.flac'])
 check('迁移后两端都有的歌仍算已同步', buildPlan(bothSides, bothSides, legacySeeded).localAdded.length + buildPlan(bothSides, bothSides, legacySeeded).remoteDeleted.length, 0)
 
+// 待确认迁移：第二次比较仍要提示，直到执行同步后才清除
+let pendingEntries = mergeBaselineEntries([], keyA, ['a.flac'], 1000, true)
+check('迁移后写入待确认标记', parseBaselineState(v3(pendingEntries), keyA).pendingMigration, true)
+check('未确认前再次比较仍提示', parseBaselineState(v3(pendingEntries), keyA), { status: 'ok', paths: ['a.flac'], pendingMigration: true })
+pendingEntries = mergeBaselineEntries(pendingEntries, keyA, ['a.flac'], 2000, false)
+check('执行同步后清除待确认标记', parseBaselineState(v3(pendingEntries), keyA), { status: 'ok', paths: ['a.flac'] })
+
 // A → B → A：每个组合单独保存，切回 A 不会丢掉 A 的基线
-const keyA = { ...baselineKey }
-const keyB = { ...baselineKey, localRoot: 'E:/MusicB' }
 let mergedEntries = mergeBaselineEntries([], keyA, ['a.flac'], 1000)
 mergedEntries = mergeBaselineEntries(mergedEntries, keyB, ['b.flac'], 2000)
 const mergedRaw = v3(mergedEntries)

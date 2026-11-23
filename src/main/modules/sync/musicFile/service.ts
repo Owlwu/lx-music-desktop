@@ -30,17 +30,22 @@ const getBaselineKey = (localRoot: string, remoteRoot: string, pairId: string): 
 const LEGACY_BASELINE_NOTICE = '检测到旧版同步基线，无法确认它属于哪台设备或哪个目录；已按两端当前都存在的文件重建基线。本次清单不做默认勾选，请复核后再同步。'
 
 /**
- * 读取当前组合的基线；旧格式先做一次性迁移：
+ * 读取当前组合的基线；旧格式或损坏数据先做一次性迁移：
  * 只保留两端当前都存在的路径，避免旧目录的记忆把当前目录里对端仍有的文件判成删除。
+ * 迁移前必须成功备份；备份失败会抛出，阻止覆盖原文件。
  */
 const loadBaselineFor = async(localIndex: FileIndex, remoteIndex: FileIndex, key: BaselineKey) => {
   const state = await loadBaselineState(key)
-  if (!state.legacy) return { baseline: state.paths, migrated: false }
+  if (state.status === 'missing') return { baseline: [], needsConfirm: false, pendingMigration: false }
+  if (state.status === 'ok') {
+    const pending = state.pendingMigration === true
+    return { baseline: state.paths, needsConfirm: pending, pendingMigration: pending }
+  }
   const seeded = seedBaselineFromLegacy(state.paths, localIndex, remoteIndex)
   await backupBaselineFile()
-  await saveBaseline(key, seeded)
-  log.info('baseline', `legacy migrated pair=${key.pairId} raw=${state.paths.length} seeded=${seeded.length}`)
-  return { baseline: seeded, migrated: true }
+  await saveBaseline(key, seeded, true)
+  log.info('baseline', `migrated status=${state.status} pair=${key.pairId} raw=${state.paths.length} seeded=${seeded.length}`)
+  return { baseline: seeded, needsConfirm: true, pendingMigration: true }
 }
 
 const createProgress = (): LX.Sync.MusicFile.Progress => ({
@@ -104,16 +109,16 @@ export const compare = async(): Promise<LX.Sync.MusicFile.CompareResult> => {
     if (!remoteRoot) throw new Error('对端未设置同步歌曲存放路径')
     const remoteIndex = await peer.musicFile_get_index(scope)
     log.info('compare', `remote(${describeSide(remoteRoot, scope)}) folders=${remoteIndex.folders.length} files=${remoteIndex.files.length}`)
-    const { baseline, migrated } = await loadBaselineFor(localIndex, remoteIndex, getBaselineKey(root, remoteRoot, pairId))
+    const { baseline, needsConfirm } = await loadBaselineFor(localIndex, remoteIndex, getBaselineKey(root, remoteRoot, pairId))
     const plan = buildPlan(localIndex, remoteIndex, baseline)
-    if (migrated) {
-      // 旧基线无法确认归属：本次不做默认勾选，要求用户逐项复核，避免静默改变操作方向
+    if (needsConfirm) {
+      // 旧基线迁移/损坏恢复尚未确认：本次不做默认勾选，要求用户逐项复核，避免静默改变操作方向
       for (const items of Object.values(plan)) {
         for (const item of items) item.defaultChecked = false
       }
     }
     log.info('compare', `plan ${JSON.stringify(Object.fromEntries(Object.entries(plan).map(([k, v]) => [k, v.length])))} baseline=${baseline.length} localFiles=${localIndex.files.length} remoteFiles=${remoteIndex.files.length}`)
-    return { plan, localRoot: root, remoteRoot, notice: migrated ? LEGACY_BASELINE_NOTICE : undefined }
+    return { plan, localRoot: root, remoteRoot, notice: needsConfirm ? LEGACY_BASELINE_NOTICE : undefined }
   } finally {
     running = false
     updateProgress({ ...createProgress(), stage: 'idle', message: '' })
@@ -179,7 +184,7 @@ export const apply = async(selection: LX.Sync.MusicFile.Selection): Promise<LX.S
     const remoteIndex = await peer.musicFile_get_index(scope)
     log.info('apply', `remote(${describeSide(remoteRoot, scope)}) folders=${remoteIndex.folders.length} files=${remoteIndex.files.length}`)
     const baselineKey = getBaselineKey(root, remoteRoot, pairId)
-    const { baseline } = await loadBaselineFor(localIndex, remoteIndex, baselineKey)
+    const { baseline, pendingMigration } = await loadBaselineFor(localIndex, remoteIndex, baselineKey)
     const plan = buildPlan(localIndex, remoteIndex, baseline)
     const actions = buildActions(plan, selection.checked, selection.direction)
     log.info('apply', `actions=${actions.length} ${JSON.stringify(actions.map(a => `${a.kind}:${a.path}+${a.sidecars.length}`).slice(0, 200))}`)
@@ -239,7 +244,7 @@ export const apply = async(selection: LX.Sync.MusicFile.Selection): Promise<LX.S
 
     if (run.cancelled) {
       // 取消：只把已完成动作写回基线；未完成项保持原状态，下一轮继续提示
-      await saveBaseline(baselineKey, applyExecutedToBaseline(baseline, run.executed))
+      await saveBaseline(baselineKey, applyExecutedToBaseline(baseline, run.executed), pendingMigration)
       updateProgress({ running: false, stage: 'error', message: CANCELLED_MESSAGE })
       throw new CancelledError()
     }
@@ -247,7 +252,8 @@ export const apply = async(selection: LX.Sync.MusicFile.Selection): Promise<LX.S
     updateProgress({ stage: 'finishing', message: '正在更新同步基线…' })
     const finalLocal = await localFs.scanIndex(root, scope)
     const finalRemote = await peer.musicFile_get_index(scope)
-    await saveBaseline(baselineKey, computeNextBaseline(baseline, run.executed, finalLocal, finalRemote, scope))
+    // 执行完成视为用户已确认迁移结果，清除待确认标记
+    await saveBaseline(baselineKey, computeNextBaseline(baseline, run.executed, finalLocal, finalRemote, scope), false)
     log.info('apply', `done downloaded=${result.downloaded} uploaded=${result.uploaded} deletedLocal=${result.deletedLocal} deletedRemote=${result.deletedRemote} errors=${result.errors.length}`)
 
     updateProgress({
