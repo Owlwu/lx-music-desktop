@@ -10,6 +10,7 @@
 只保留本地音乐播放与跨端同步：
 
 - 播放本地音频（mp3 / flac / ogg / oga / wav / m4a），读取内嵌或同名歌词/封面
+- 在线歌词/封面匹配：为本地歌曲补全缺失的歌词与封面（只取歌词/封面元数据，不提供在线音源）
 - 我的列表：文件夹递归导入、排序、查重、导入导出 `.lxmc`
 - 桌面歌词、均衡器/卷积混响、变速变调、全局快捷键、系统托盘
 - 与 [lx-music-mobile](https://github.com/lyswhut/lx-music-mobile) 的跨端同步：列表 / 不喜欢列表 /
@@ -22,7 +23,7 @@
 
 ## 技术栈
 
-- Electron 40
+- Electron 42
 - Vue 3 + Vue Router
 - TypeScript + Webpack 5
 - better-sqlite3（数据）、undici（请求）

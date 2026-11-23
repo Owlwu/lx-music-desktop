@@ -62,6 +62,7 @@
     "build:renderer-lyric": "cross-env NODE_ENV=production webpack --config build-config/renderer-lyric/webpack.config.prod.js --progress",
     "lint": "eslint --ext .ts,.js,.vue -f node_modules/eslint-formatter-friendly src",
     "lint:fix": "eslint --ext .ts,.js,.vue -f node_modules/eslint-formatter-friendly --fix src",
+    "test": "node tests/run-all.mjs",
     "postinstall": "node build-config/postinstall.js",
     "dp": "cross-env ELECTRON_GET_USE_PROXY=true GLOBAL_AGENT_HTTPS_PROXY=http://127.0.0.1:2081 npm run pack",
     "up": "cross-env ELECTRON_GET_USE_PROXY=true GLOBAL_AGENT_HTTPS_PROXY=http://127.0.0.1:2081 npm i"

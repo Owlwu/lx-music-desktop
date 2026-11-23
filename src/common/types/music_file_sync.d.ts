@@ -41,6 +41,11 @@ declare namespace LX {
         lyric: LyricItem | null
         /** 同目录同名的 .jpg/.png（jpg 优先），不存在时为 null */
         cover: CoverItem | null
+        /**
+         * 同 stem 的全部封面（jpg / png 同时存在时都保留，jpg 在前）。
+         * 旧对端没有该字段时按 `cover` 单值处理；删除靠它避免漏删另一种格式。
+         */
+        covers?: CoverItem[]
       }
 
       interface FileIndex {
@@ -70,9 +75,9 @@ declare namespace LX {
         uploadSidecars: SidecarItem[]
         /** 方向为 download 时要顺带传的伴生文件（源对端有、本地没有；cover 需 remoteCoverSupport） */
         downloadSidecars: SidecarItem[]
-        /** delete_local 时要删除的本地伴生文件 */
+        /** delete_local 时要删除的本地伴生文件（歌词 + 全部封面；同 stem 还有其他音频时为空） */
         localSidecars: SidecarItem[]
-        /** delete_remote 时要删除的对端伴生文件（cover 需 remoteCoverSupport） */
+        /** delete_remote 时要删除的对端伴生文件（歌词 + 全部封面；cover 需 remoteCoverSupport） */
         remoteSidecars: SidecarItem[]
         defaultChecked: boolean
         defaultDirection: TransferDirection

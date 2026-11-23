@@ -356,6 +356,31 @@ check('delete_remote 动作携带 sidecars', delRemoteActions, [{
   ],
 }])
 
+console.log('\n== 删除歌词/封面的完整性（jpg+png、共享 stem） ==')
+const bothCoversLocal = indexWithSupport(
+  file('both.flac', 500, 50),
+  cover('both.flac', 'jpg', 4000),
+  cover('both.flac', 'png', 5000),
+)
+const bothDeletePlan = buildPlan(bothCoversLocal, indexWithSupport(), ['both.flac'])
+check('删除时 jpg+png 都带上', bothDeletePlan.remoteDeleted[0].localSidecars.map(item => item.path), ['both.lrc', 'both.jpg', 'both.png'])
+const bothUploadPlan = buildPlan(bothCoversLocal, indexWithSupport(file('both.flac', 501)), [])
+check('传输仍只带 jpg 一张', bothUploadPlan.conflict[0].uploadSidecars.map(item => item.path), ['both.lrc', 'both.jpg'])
+
+const sharedLocal = indexWithSupport(file('song.mp3', 100, 40), file('song.flac', 200), cover('song.mp3', 'jpg', 4000))
+const sharedRemote = indexWithSupport(file('song.flac', 200))
+const sharedPlan = buildPlan(sharedLocal, sharedRemote, ['song.mp3', 'song.flac'])
+check('同 stem 还有其他音频 → 不删共享伴生', sharedPlan.remoteDeleted[0].localSidecars, [])
+const sharedAction = buildActions(sharedPlan, { [planSelectionKey('remoteDeleted', 'song.mp3')]: true }, {})
+check('共享时只删音频', getActionTargets(sharedAction[0]), ['song.mp3'])
+
+const builtWithCovers = indexWithSupport(file('old2.flac', 500, 50), cover('old2.flac', 'jpg', 4000))
+const legacyIndex: FileIndex = {
+  ...builtWithCovers,
+  files: builtWithCovers.files.map(({ covers, ...rest }) => rest),
+}
+check('旧索引无 covers → 退回单封面删除', buildPlan(legacyIndex, indexWithSupport(), ['old2.flac']).remoteDeleted[0].localSidecars.map(item => item.path), ['old2.lrc', 'old2.jpg'])
+
 console.log('\n== 内容签名：发现「字节数相同但内容不同」 ==')
 check('取样范围: 大文件首尾各 4096', getSignatureRanges(100000), { headLength: 4096, tailOffset: 95904, tailLength: 4096 })
 check('取样范围: 刚好 2 倍取样', getSignatureRanges(8192), { headLength: 4096, tailOffset: 4096, tailLength: 4096 })
