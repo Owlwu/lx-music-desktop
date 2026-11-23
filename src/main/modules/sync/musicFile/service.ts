@@ -1,8 +1,9 @@
 import { sendSyncAction } from '@main/modules/winMain'
 import {
+  applyExecutedToBaseline,
   buildActions,
-  buildBaseline,
   buildPlan,
+  computeNextBaseline,
   getActionTargets,
   MUSIC_FILE_CHUNK_SIZE,
   normalizeScope,
@@ -10,11 +11,15 @@ import {
 } from './diff'
 import * as localFs from './localFs'
 import { loadBaseline, saveBaseline } from './baseline'
-import { getPeer, type MusicFilePeer } from './peer'
+import { getPeer, getPeerDeviceName, type MusicFilePeer } from './peer'
+import { CANCELLED_MESSAGE, CancelledError, runActions } from './executor'
 import log from './logger'
 
 /** 两端的诊断日志都带上根目录与 scope，便于直接对照 */
 const describeSide = (root: string, scope: readonly string[]) => `root=${root} scope=${JSON.stringify(scope)}`
+
+/** 基线绑定对端设备与根目录；换设备或换目录时按首次同步处理 */
+const getBaselineKey = (remoteRoot: string) => ({ deviceName: getPeerDeviceName(), remoteRoot })
 
 const createProgress = (): LX.Sync.MusicFile.Progress => ({
   running: false,
@@ -77,7 +82,7 @@ export const compare = async(): Promise<LX.Sync.MusicFile.CompareResult> => {
     if (!remoteRoot) throw new Error('对端未设置同步歌曲存放路径')
     const remoteIndex = await peer.musicFile_get_index(scope)
     log.info('compare', `remote(${describeSide(remoteRoot, scope)}) folders=${remoteIndex.folders.length} files=${remoteIndex.files.length}`)
-    const baseline = await loadBaseline()
+    const baseline = await loadBaseline(getBaselineKey(remoteRoot))
     const plan = buildPlan(localIndex, remoteIndex, baseline)
     log.info('compare', `plan ${JSON.stringify(Object.fromEntries(Object.entries(plan).map(([k, v]) => [k, v.length])))} baseline=${baseline.length} localFiles=${localIndex.files.length} remoteFiles=${remoteIndex.files.length}`)
     return { plan, localRoot: root, remoteRoot }
@@ -145,7 +150,9 @@ export const apply = async(selection: LX.Sync.MusicFile.Selection): Promise<LX.S
     if (!remoteRoot) throw new Error('对端未设置同步歌曲存放路径')
     const remoteIndex = await peer.musicFile_get_index(scope)
     log.info('apply', `remote(${describeSide(remoteRoot, scope)}) folders=${remoteIndex.folders.length} files=${remoteIndex.files.length}`)
-    const plan = buildPlan(localIndex, remoteIndex, await loadBaseline())
+    const baselineKey = getBaselineKey(remoteRoot)
+    const baseline = await loadBaseline(baselineKey)
+    const plan = buildPlan(localIndex, remoteIndex, baseline)
     const actions = buildActions(plan, selection.checked, selection.direction)
     log.info('apply', `actions=${actions.length} ${JSON.stringify(actions.map(a => `${a.kind}:${a.path}+${a.sidecars.length}`).slice(0, 200))}`)
     const totalBytes = sumActionBytes(actions)
@@ -162,57 +169,57 @@ export const apply = async(selection: LX.Sync.MusicFile.Selection): Promise<LX.S
       message: '',
     })
 
-    /** 一个动作实际要处理的目标路径：音频 + 伴生歌词/封面 */
-    const targetsOf = (action: TransferAction) => getActionTargets(action)
-
-    for (let index = 0; index < actions.length; index++) {
-      const action = actions[index]
-      updateProgress({ actionIndex: index + 1, kind: action.kind, path: action.path, fileBytes: 0 })
-      try {
+    const run = await runActions(actions, {
+      targetsOf: getActionTargets,
+      download: async(relPath, onBytes) => transferDownloadFile(peer, root, relPath, onBytes),
+      upload: async(relPath, onBytes) => transferUploadFile(peer, root, relPath, onBytes),
+      deleteLocal: async(relPath) => localFs.deleteFile(root, relPath),
+      // 不改 RPC 签名：对音频与每个伴生文件分别调用 delete_file(path, false)
+      deleteRemote: async(relPath) => peer.musicFile_delete_file(relPath, false),
+      isCancelled: () => cancelled,
+      onActionStart: (action, index) => {
+        updateProgress({ actionIndex: index + 1, kind: action.kind, path: action.path, fileBytes: 0 })
+      },
+      onActionDone: (action) => {
         switch (action.kind) {
           case 'download':
-            for (const target of targetsOf(action)) {
-              await transferDownloadFile(peer, root, target, (bytes) => {
-                doneBytes += bytes
-                updateProgress({ fileBytes: progress.fileBytes + bytes, doneBytes })
-              })
-            }
             result.downloaded++
             break
           case 'upload':
-            for (const target of targetsOf(action)) {
-              await transferUploadFile(peer, root, target, (bytes) => {
-                doneBytes += bytes
-                updateProgress({ fileBytes: progress.fileBytes + bytes, doneBytes })
-              })
-            }
             result.uploaded++
             break
           case 'delete_local':
-            // 音频 + 该侧实际存在的伴生文件，逐个删除
-            for (const target of targetsOf(action)) await localFs.deleteFile(root, target)
             result.deletedLocal++
             break
           case 'delete_remote':
-            // 不改 RPC 签名：对音频与每个伴生文件分别调用 delete_file(path, false)
-            for (const target of targetsOf(action)) await peer.musicFile_delete_file(target, false)
             result.deletedRemote++
             break
         }
-      } catch (err: any) {
-        if (cancelled) throw err
+      },
+      onActionError: (action, err) => {
         // 记录失败动作的类型与两端根目录，便于判断是“本地读”还是“远端读”出的问题
-        log.err('apply', `action failed kind=${action.kind} path=${action.path} localRoot=${root} remoteRoot=${remoteRoot} err=${err?.message ?? err}`)
-        const message = `${action.path}: ${err?.message ?? err}`
-        result.errors.push(message)
+        const message = err instanceof Error ? err.message : String(err)
+        log.err('apply', `action failed kind=${action.kind} path=${action.path} localRoot=${root} remoteRoot=${remoteRoot} err=${message}`)
+        result.errors.push(`${action.path}: ${message}`)
         updateProgress({ errors: [...result.errors] })
-      }
+      },
+      onBytes: (bytes) => {
+        doneBytes += bytes
+        updateProgress({ fileBytes: progress.fileBytes + bytes, doneBytes })
+      },
+    })
+
+    if (run.cancelled) {
+      // 取消：只把已完成动作写回基线；未完成项保持原状态，下一轮继续提示
+      await saveBaseline(baselineKey, applyExecutedToBaseline(baseline, run.executed))
+      updateProgress({ running: false, stage: 'error', message: CANCELLED_MESSAGE })
+      throw new CancelledError()
     }
 
     updateProgress({ stage: 'finishing', message: '正在更新同步基线…' })
     const finalLocal = await localFs.scanIndex(root, scope)
     const finalRemote = await peer.musicFile_get_index(scope)
-    await saveBaseline(buildBaseline(finalLocal, finalRemote))
+    await saveBaseline(baselineKey, computeNextBaseline(baseline, run.executed, finalLocal, finalRemote, scope))
     log.info('apply', `done downloaded=${result.downloaded} uploaded=${result.uploaded} deletedLocal=${result.deletedLocal} deletedRemote=${result.deletedRemote} errors=${result.errors.length}`)
 
     updateProgress({
