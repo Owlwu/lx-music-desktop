@@ -58,15 +58,19 @@ export const saveBaseline = async(key: BaselineKey, paths: readonly string[], pe
 }
 
 /**
- * 迁移旧格式前备份原文件。
- * 备份失败时抛出，调用方据此中止迁移——绝不能在没有备份的情况下覆盖原基线。
+ * 迁移旧格式前尽力备份原文件，返回失败提示（成功时返回 null）。
+ *
+ * 不阻断迁移：基线只是分类提示，丢了最多退化成「按新增/删除重新确认」，不会丢音乐文件；
+ * 备份和正式写入又共享同一目录，真正写不了时后面的写入也会失败。单用户场景下
+ * 为一个备份失败挡住整次同步，代价大于收益。
  */
-export const backupBaselineFile = async() => {
+export const backupBaselineFile = async(): Promise<string | null> => {
   try {
     await fsp.copyFile(getBaselinePath(), `${getBaselinePath()}.legacy`)
+    return null
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
-    throw new Error(`备份旧同步基线失败，已停止迁移：${message}`)
+    return `原基线备份失败（${message}），已继续迁移`
   }
 }
 
