@@ -50,7 +50,7 @@ const deleteAct = (kind: 'delete_local' | 'delete_remote', path: string, sidecar
     : { kind, path, sidecars }
 }
 
-const baselineKey = { deviceName: 'MI17', remoteRoot: '/storage/emulated/0/Music' }
+const baselineKey = { pairId: 'client:phone-1', localRoot: 'D:/Music', remoteRoot: '/storage/emulated/0/Music' }
 
 console.log('\n== 基线增量更新 ==')
 const localAfterSync = indexOf(audio('a.flac'), audio('b.flac'), audio('c.flac'))
@@ -97,12 +97,17 @@ check(
 )
 
 console.log('\n== 基线文件键控 ==')
-const keyOk = JSON.stringify({ version: 1, ...baselineKey, paths: ['a.flac'] })
-check('同设备同根目录可读', parseBaseline(keyOk, baselineKey), ['a.flac'])
-check('换设备按首次同步', parseBaseline(JSON.stringify({ version: 1, deviceName: 'other', remoteRoot: baselineKey.remoteRoot, paths: ['a.flac'] }), baselineKey), [])
-check('换根目录按首次同步', parseBaseline(JSON.stringify({ version: 1, deviceName: baselineKey.deviceName, remoteRoot: '/other', paths: ['a.flac'] }), baselineKey), [])
+const keyOk = JSON.stringify({ version: 2, ...baselineKey, paths: ['a.flac'] })
+check('同配对同根目录可读', parseBaseline(keyOk, baselineKey), ['a.flac'])
+check('换配对按首次同步', parseBaseline(JSON.stringify({ version: 2, ...baselineKey, pairId: 'client:other', paths: ['a.flac'] }), baselineKey), [])
+check('换本地根目录按首次同步', parseBaseline(JSON.stringify({ version: 2, ...baselineKey, localRoot: 'E:/Music', paths: ['a.flac'] }), baselineKey), [])
+check('换对端根目录按首次同步', parseBaseline(JSON.stringify({ version: 2, ...baselineKey, remoteRoot: '/other', paths: ['a.flac'] }), baselineKey), [])
 check('旧版裸数组沿用一次（避免升级后删除变新增）', parseBaseline(JSON.stringify(['a.flac']), baselineKey), ['a.flac'])
 check('坏 JSON 不抛错', parseBaseline('{', baselineKey), [])
+
+// 换到空目录：旧基线不命中 → 对端仍有的歌曲应列为可下载，而不是删除对端
+const switchedBaseline = parseBaseline(JSON.stringify({ version: 2, ...baselineKey, paths: ['song.flac'] }), { ...baselineKey, localRoot: 'E:/NewMusic' })
+check('换本地根目录后对端歌曲按新增', buildPlan(indexOf(), indexOf(audio('song.flac')), switchedBaseline).remoteAdded.map(item => item.path), ['song.flac'])
 
 void (async() => {
   console.log('\n== 动作编排 ==')
@@ -174,6 +179,21 @@ void (async() => {
     check('失败后继续下一个动作', calls, ['delete_local:b.flac'])
     check('失败错误收集', run.errors, ['a.flac: boom'])
     check('失败回调', errors, ['boom'])
+  }
+
+  {
+    calls.length = 0
+    let cancelNow = false
+    const run = await runActions(
+      [transferAct('upload', 'a.flac')],
+      ops({
+        isCancelled: () => cancelNow,
+        upload: async() => { cancelNow = true },
+      }),
+    )
+    check('最后一个目标期间取消也按取消收尾', run.cancelled, true)
+    check('已完成动作仍保留', run.executed, [{ kind: 'upload', path: 'a.flac', ok: true }])
+    check('不产生错误', run.errors, [])
   }
 
   {

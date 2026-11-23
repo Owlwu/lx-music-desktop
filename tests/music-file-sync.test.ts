@@ -374,6 +374,12 @@ check('同 stem 还有其他音频 → 不删共享伴生', sharedPlan.remoteDel
 const sharedAction = buildActions(sharedPlan, { [planSelectionKey('remoteDeleted', 'song.mp3')]: true }, {})
 check('共享时只删音频', getActionTargets(sharedAction[0]), ['song.mp3'])
 
+// Windows 大小写不敏感：Song.mp3 与 song.flac 共用 Song.jpg，删除前者要保留伴生
+const caseLocal = indexWithSupport(file('Song.mp3', 100, 40), file('song.flac', 200), cover('Song.mp3', 'jpg', 4000))
+const caseRemote = indexWithSupport(file('song.flac', 200))
+const casePlan = buildPlan(caseLocal, caseRemote, ['Song.mp3', 'song.flac'])
+check('大小写不同的同 stem 也按共享处理', casePlan.remoteDeleted[0].localSidecars, [])
+
 const builtWithCovers = indexWithSupport(file('old2.flac', 500, 50), cover('old2.flac', 'jpg', 4000))
 const legacyIndex: FileIndex = {
   ...builtWithCovers,

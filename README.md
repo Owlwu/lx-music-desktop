@@ -6,8 +6,8 @@
 
 ## 本分支说明
 
-本仓库是 [lx-music-desktop](https://github.com/lyswhut/lx-music-desktop) 的**个人精简分支**，已移除全部在线能力，
-只保留本地音乐播放与跨端同步：
+本仓库是 [lx-music-desktop](https://github.com/lyswhut/lx-music-desktop) 的**个人精简分支**，已移除在线音源、在线歌单与数据抓取等在线能力，
+只保留本地音乐播放、跨端同步，以及为本地歌曲补全歌词/封面的在线匹配：
 
 - 播放本地音频（mp3 / flac / ogg / oga / wav / m4a），读取内嵌或同名歌词/封面
 - 在线歌词/封面匹配：为本地歌曲补全缺失的歌词与封面（只取歌词/封面元数据，不提供在线音源）
@@ -63,6 +63,7 @@ npm install
 npm run dev      # 开发（webpack watch + Electron）
 npm run lint     # ESLint
 npm run build    # 构建三个 bundle 到 dist/
+npm run test     # 业务脚本（需要 Node >= 22.18，使用内置类型擦除）
 npm run pack     # 打包 Windows 安装包
 ```
 

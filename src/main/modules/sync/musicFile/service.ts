@@ -11,15 +11,18 @@ import {
 } from './diff'
 import * as localFs from './localFs'
 import { loadBaseline, saveBaseline } from './baseline'
-import { getPeer, getPeerDeviceName, type MusicFilePeer } from './peer'
+import { getPeerRef, type MusicFilePeer } from './peer'
 import { CANCELLED_MESSAGE, CancelledError, runActions } from './executor'
 import log from './logger'
 
 /** 两端的诊断日志都带上根目录与 scope，便于直接对照 */
 const describeSide = (root: string, scope: readonly string[]) => `root=${root} scope=${JSON.stringify(scope)}`
 
-/** 基线绑定对端设备与根目录；换设备或换目录时按首次同步处理 */
-const getBaselineKey = (remoteRoot: string) => ({ deviceName: getPeerDeviceName(), remoteRoot })
+/**
+ * 基线绑定「对端配对 + 两端根目录」。
+ * 本地根目录必须参与：换到空目录后如果沿用旧基线，对端仍有的文件会被判成「删除对端」。
+ */
+const getBaselineKey = (localRoot: string, remoteRoot: string, pairId: string) => ({ pairId, localRoot, remoteRoot })
 
 const createProgress = (): LX.Sync.MusicFile.Progress => ({
   running: false,
@@ -59,19 +62,19 @@ export const getFolders = async() => {
   return localFs.scanFolderTree(root)
 }
 
-const requirePeer = async(): Promise<{ peer: MusicFilePeer, root: string, scope: string[] }> => {
+const requirePeer = async(): Promise<{ peer: MusicFilePeer, root: string, scope: string[], pairId: string, deviceName: string }> => {
   if (running) throw new Error('同步正在进行中')
-  const peer = getPeer()
-  if (!peer) throw new Error('未连接到对端设备，或对端版本不支持本地音乐同步')
+  const ref = getPeerRef()
+  if (!ref) throw new Error('未连接到对端设备，或对端版本不支持本地音乐同步')
   const root = localFs.getRootPath()
   if (!root) throw new Error('未设置同步歌曲存放路径')
   if (!await localFs.rootExists(root)) throw new Error('同步歌曲存放路径不存在')
-  return { peer, root, scope: normalizeScope(localFs.getScope()) }
+  return { peer: ref.peer, root, scope: normalizeScope(localFs.getScope()), pairId: ref.pairId, deviceName: ref.deviceName }
 }
 
 /** 扫描两端并生成变更清单 */
 export const compare = async(): Promise<LX.Sync.MusicFile.CompareResult> => {
-  const { peer, root, scope } = await requirePeer()
+  const { peer, root, scope, pairId } = await requirePeer()
   running = true
   updateProgress({ ...createProgress(), running: true, stage: 'comparing', message: '正在扫描本地文件…' })
   try {
@@ -82,7 +85,7 @@ export const compare = async(): Promise<LX.Sync.MusicFile.CompareResult> => {
     if (!remoteRoot) throw new Error('对端未设置同步歌曲存放路径')
     const remoteIndex = await peer.musicFile_get_index(scope)
     log.info('compare', `remote(${describeSide(remoteRoot, scope)}) folders=${remoteIndex.folders.length} files=${remoteIndex.files.length}`)
-    const baseline = await loadBaseline(getBaselineKey(remoteRoot))
+    const baseline = await loadBaseline(getBaselineKey(root, remoteRoot, pairId))
     const plan = buildPlan(localIndex, remoteIndex, baseline)
     log.info('compare', `plan ${JSON.stringify(Object.fromEntries(Object.entries(plan).map(([k, v]) => [k, v.length])))} baseline=${baseline.length} localFiles=${localIndex.files.length} remoteFiles=${remoteIndex.files.length}`)
     return { plan, localRoot: root, remoteRoot }
@@ -138,7 +141,7 @@ export const sumActionBytes = (actions: readonly TransferAction[]): number => {
 
 /** 执行用户在清单中勾选的传输动作 */
 export const apply = async(selection: LX.Sync.MusicFile.Selection): Promise<LX.Sync.MusicFile.ApplyResult> => {
-  const { peer, root, scope } = await requirePeer()
+  const { peer, root, scope, pairId } = await requirePeer()
   running = true
   cancelled = false
   const result: LX.Sync.MusicFile.ApplyResult = { downloaded: 0, uploaded: 0, deletedLocal: 0, deletedRemote: 0, errors: [] }
@@ -150,7 +153,7 @@ export const apply = async(selection: LX.Sync.MusicFile.Selection): Promise<LX.S
     if (!remoteRoot) throw new Error('对端未设置同步歌曲存放路径')
     const remoteIndex = await peer.musicFile_get_index(scope)
     log.info('apply', `remote(${describeSide(remoteRoot, scope)}) folders=${remoteIndex.folders.length} files=${remoteIndex.files.length}`)
-    const baselineKey = getBaselineKey(remoteRoot)
+    const baselineKey = getBaselineKey(root, remoteRoot, pairId)
     const baseline = await loadBaseline(baselineKey)
     const plan = buildPlan(localIndex, remoteIndex, baseline)
     const actions = buildActions(plan, selection.checked, selection.direction)

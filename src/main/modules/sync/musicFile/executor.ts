@@ -73,6 +73,11 @@ export const runActions = async(actions: readonly TransferAction[], ops: ActionO
       }
       result.executed.push({ kind: action.kind, path: action.path, ok: true })
       ops.onActionDone?.(action)
+      // 最后一个目标执行期间点的取消：动作已经完成，仍要按取消收尾并保留这条完成记录
+      if (ops.isCancelled()) {
+        result.cancelled = true
+        return result
+      }
     } catch (err) {
       // 传输中途被取消：按取消处理，不记成失败
       if (err instanceof CancelledError || ops.isCancelled()) {

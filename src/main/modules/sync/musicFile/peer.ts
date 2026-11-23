@@ -12,7 +12,15 @@ export interface MusicFilePeer {
 interface ReadyClientSocket {
   moduleReadys?: { musicFile?: boolean }
   remote: MusicFilePeer
-  keyInfo: { deviceName: string }
+  keyInfo: { clientId?: string, deviceName: string }
+}
+
+/** 对端引用：peer 与「配对标识」必须来自同一次连接解析，避免扫描期间连接列表变化导致错配 */
+export interface MusicFilePeerRef {
+  peer: MusicFilePeer
+  /** 稳定标识：服务端模式用客户端 clientId，客户端模式用服务端名 + 地址 */
+  pairId: string
+  deviceName: string
 }
 
 /**
@@ -31,23 +39,33 @@ const getReadyClientSockets = (): ReadyClientSocket[] => {
 }
 
 /**
- * 找到当前用于传输文件的对端连接：
- * - 本机作为同步服务端时，取第一个已就绪的客户端连接
- * - 本机作为同步客户端时，取自身连接
+ * 找到当前用于传输文件的对端连接，并一次性取出配对标识。
+ *
+ * - 本机作为同步服务端时：取第一个已就绪的客户端连接，用它的 clientId 做配对；
+ * - 本机作为同步客户端时：取自身连接，用服务端名 + 地址做配对（两者变化视为换端）。
  */
-export const getPeer = (): MusicFilePeer | null => {
+export const getPeerRef = (): MusicFilePeerRef | null => {
   if (global.lx.appSetting['sync.mode'] === 'server') {
     const socket = getReadyClientSockets().find(client => client.moduleReadys?.musicFile)
-    return socket ? socket.remote : null
+    if (!socket) return null
+    const clientId = socket.keyInfo.clientId ?? ''
+    return {
+      peer: socket.remote,
+      // 旧版本对端可能没有 clientId，退回设备名，至少同名设备仍可能共用基线
+      pairId: `client:${clientId || socket.keyInfo.deviceName}`,
+      deviceName: socket.keyInfo.deviceName,
+    }
   }
   const socket = getSocket()
   if (!socket?.isReady || !socket.moduleReadys?.musicFile) return null
-  return socket.remote
+  const { serverName } = socket.data.keyInfo
+  return {
+    peer: socket.remote,
+    pairId: `server:${serverName}@${socket.data.urlInfo.hostPath}`,
+    deviceName: serverName,
+  }
 }
 
-export const getPeerDeviceName = (): string => {
-  if (global.lx.appSetting['sync.mode'] === 'server') {
-    return getReadyClientSockets().find(client => client.moduleReadys?.musicFile)?.keyInfo.deviceName ?? ''
-  }
-  return getSocket()?.data.keyInfo.serverName ?? ''
-}
+export const getPeer = (): MusicFilePeer | null => getPeerRef()?.peer ?? null
+
+export const getPeerDeviceName = (): string => getPeerRef()?.deviceName ?? ''
