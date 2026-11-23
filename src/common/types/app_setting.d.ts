@@ -404,6 +404,11 @@ declare global {
       'desktopLyric.style.lineGap': number
 
       /**
+       * 文字左右边距（距歌词窗口左右边缘的空白），单位 px
+       */
+      'desktopLyric.style.sideGap': number
+
+      /**
        * 桌面歌词未播放字体颜色
        */
       'desktopLyric.style.lyricUnplayColor': string

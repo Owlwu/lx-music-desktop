@@ -5,7 +5,7 @@
     :style="lrcStyles" @wheel="handleWheel" @mousedown="handleLyricMouseDown" @touchstart="handleLyricTouchStart"
   >
     <div :class="$style.lyricSpace" />
-    <div ref="dom_lyric_text" />
+    <div ref="dom_lyric_text" :style="textStyles" />
     <div :class="$style.lyricSpace" />
   </div>
 </template>
@@ -42,6 +42,15 @@ export default {
       '--line-gap': setting['desktopLyric.style.lineGap'] + 'px',
       '--line-extended-gap': (setting['desktopLyric.style.lineGap'] / 3).toFixed(2) + 'px',
     }))
+    // 文字左右边界：距窗口左右边缘的空白，窗口过窄时最多占 45%，避免把文字挤没
+    const textStyles = computed(() => {
+      const gap = Math.max(Math.trunc(setting['desktopLyric.style.sideGap'] ?? 0), 0)
+      const padding = `min(${gap}px, 45%)`
+      return {
+        paddingLeft: padding,
+        paddingRight: padding,
+      }
+    })
     const isComputeHeight = computed(() => {
       return setting['desktopLyric.style.isZoomActiveLrc'] && !setting['desktopLyric.isDelayScroll']
     })
@@ -57,6 +66,7 @@ export default {
     return {
       classNames,
       lrcStyles,
+      textStyles,
 
       dom_lyric,
       dom_lyric_text,

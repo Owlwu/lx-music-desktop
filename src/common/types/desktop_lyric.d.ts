@@ -21,6 +21,7 @@ declare namespace LX {
       'desktopLyric.style.font': LX.AppSetting['desktopLyric.style.font']
       'desktopLyric.style.fontSize': LX.AppSetting['desktopLyric.style.fontSize']
       'desktopLyric.style.lineGap': LX.AppSetting['desktopLyric.style.lineGap']
+      'desktopLyric.style.sideGap': LX.AppSetting['desktopLyric.style.sideGap']
       'desktopLyric.style.lyricUnplayColor': LX.AppSetting['desktopLyric.style.lyricUnplayColor']
       'desktopLyric.style.lyricPlayedColor': LX.AppSetting['desktopLyric.style.lyricPlayedColor']
       'desktopLyric.style.lyricShadowColor': LX.AppSetting['desktopLyric.style.lyricShadowColor']

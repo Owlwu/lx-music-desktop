@@ -61,6 +61,14 @@ dd
     base-checkbox.gap-left(id="setting_desktop_lyric_align_right" :model-value="appSetting['desktopLyric.style.align']" need value="right" :label="$t('setting__desktop_lyric_align_right')" @update:model-value="updateSetting({ 'desktopLyric.style.align': $event })")
 
 dd
+  h3#desktop_lyric_side_gap {{ $t('setting__desktop_lyric_side_gap', { num: appSetting['desktopLyric.style.sideGap'] }) }}
+  div
+    .p
+      base-btn.btn(min @click="changeSideGap(-4)") {{ $t('setting__desktop_lyric_side_gap_dec') }}
+      base-btn.btn(min @click="changeSideGap(4)") {{ $t('setting__desktop_lyric_side_gap_add') }}
+      svg-icon(class="help-icon" name="help-circle-outline" :aria-label="$t('setting__desktop_lyric_side_gap_tip')")
+
+dd
   h3#desktop_lyric_line_gap {{ $t('setting__desktop_lyric_line_gap', { num: appSetting['desktopLyric.style.lineGap'] }) }}
   div
     .p
@@ -262,6 +270,10 @@ export default {
       let gap = appSetting['desktopLyric.style.lineGap'] + step
       updateSetting({ 'desktopLyric.style.lineGap': Math.min(Math.max(gap, 0), 25) })
     }
+    const changeSideGap = (step) => {
+      const gap = appSetting['desktopLyric.style.sideGap'] + step
+      updateSetting({ 'desktopLyric.style.sideGap': Math.min(Math.max(gap, 0), 200) })
+    }
 
     const {
       lyric_unplay_color_ref,
@@ -291,6 +303,7 @@ export default {
       appSetting,
       updateSetting,
       changeLineGap,
+      changeSideGap,
       lyric_unplay_color_ref,
       lyric_played_color_ref,
       lyric_shadow_color_ref,

@@ -86,6 +86,7 @@ const defaultSetting: LX.AppSetting = {
   'desktopLyric.style.font': '',
   'desktopLyric.style.fontSize': 20,
   'desktopLyric.style.lineGap': 15,
+  'desktopLyric.style.sideGap': 20,
   'desktopLyric.style.lyricUnplayColor': 'rgba(255, 255, 255, 1)',
   'desktopLyric.style.lyricPlayedColor': 'rgba(7, 197, 86, 1)',
   'desktopLyric.style.lyricShadowColor': 'rgba(0, 0, 0, 0.18)',
