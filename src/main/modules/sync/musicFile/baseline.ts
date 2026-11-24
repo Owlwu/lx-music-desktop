@@ -15,7 +15,7 @@ import {
  * 只有发起同步的一端才需要保存基线。
  *
  * 旧版格式（裸数组 / v1 / v2）由 `loadBaselineState` 标记为 legacy，损坏文件标记为 corrupt；
- * 调用方做一次性迁移（只保留两端当前都存在的路径），迁移前必须先成功备份，
+ * 调用方做一次性迁移（只保留两端当前都存在的路径），迁移前尽力备份、备份失败只记提示不阻断，
  * 并在界面上提示本次清单需人工复核。
  */
 export type { BaselineKey, BaselineState }
@@ -49,7 +49,7 @@ export const loadBaseline = async(key: BaselineKey): Promise<string[]> => (await
 
 export const saveBaseline = async(key: BaselineKey, paths: readonly string[], pendingMigration = false) => {
   await fsp.mkdir(getDirPath(), { recursive: true })
-  // 读旧文件只为保留其他目录组合的基线；解析失败的单条会在写入时被丢弃（迁移前已备份原文件）
+  // 读旧文件只为保留其他目录组合的基线；解析失败的单条会在写入时被丢弃（迁移前会尽力备份原文件）
   const { raw } = await readRaw()
   const entries = parseBaselineEntries(raw)
   const merged = mergeBaselineEntries(entries, key, paths, Date.now(), pendingMigration)
