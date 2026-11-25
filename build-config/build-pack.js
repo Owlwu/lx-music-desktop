@@ -6,6 +6,7 @@ process.env.ELECTRON_BUILDER_BINARIES_MIRROR ??= 'https://npmmirror.com/mirrors/
 const builder = require('electron-builder')
 const beforePack = require('./build-before-pack')
 const afterPack = require('./build-after-pack')
+const { loadSigningConfig } = require('./signing/signing-config')
 
 /**
 * @type {import('electron-builder').Configuration}
@@ -22,6 +23,7 @@ const options = {
   },
   files: [
     '!node_modules/**/*',
+    '!build-config/signing/**/*',
     'node_modules/font-list',
     'node_modules/better-sqlite3/lib',
     'node_modules/better-sqlite3/package.json',
@@ -87,7 +89,7 @@ const linuxOptions = {
         'Name[zh_CN]': 'LX Music',
         'Name[zh_TW]': 'LX Music',
         Encoding: 'UTF-8',
-          StartupNotify: 'false',
+        StartupNotify: 'false',
       },
     },
   },
@@ -263,6 +265,19 @@ const createTarget = {
  * @param {'onTagOrDraft' | 'always' | 'never'} publishType 发布类型
  */
 const build = async(target, arch, packageType, publishType) => {
+  const buildPlatform = target == 'dir' ? { win32: 'win', darwin: 'mac' }[process.platform] : target
+  const signing = ['win', 'mac'].includes(buildPlatform) ? loadSigningConfig() : {}
+  if (buildPlatform == 'win' && signing.win) {
+    process.env.WIN_CSC_LINK = signing.win.certificateFile
+    process.env.WIN_CSC_KEY_PASSWORD ??= signing.win.certificatePassword
+    winOptions.win.forceCodeSigning = true
+  }
+  if (buildPlatform == 'mac' && signing.mac) {
+    macOptions.mac.identity = signing.mac.identity
+    macOptions.mac.forceCodeSigning = true
+    if (!signing.mac.notarize) macOptions.mac.notarize = false
+  }
+
   if (target == 'dir') {
     await builder.build({
       dir: true,

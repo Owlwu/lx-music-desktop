@@ -74,3 +74,13 @@ src/**/*-internal.js
 /resources/music/
 /.vscode/
 /.github/
+
+# 桌面端本地签名材料与旧版生成文件
+/build-config/signing/**/*.p12
+/build-config/signing/**/*.pfx
+/build-config/signing/**/*.pem
+/build-config/signing/**/*.key
+/build-config/signing/**/*.cer
+/build-config/signing/**/*.crt
+/build-config/signing/**/signing.env
+/build-config/signing/**/signing.json
