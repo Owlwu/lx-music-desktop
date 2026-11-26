@@ -3,7 +3,7 @@ import { mainHandle } from '@common/mainIpc'
 import { log } from '@common/utils'
 import { checkPath } from '@common/utils/nodejs'
 import { createQuery, downloadCoverImage, searchCandidates, CoverMatchError } from './matcher'
-import { applyCoverImage, CoverFileError, getCoverState, rollbackCover } from './coverFile'
+import { applyCoverImage, CoverFileError, getCoverState, deleteCover } from './coverFile'
 import { buildQqCoverUrl } from './providers/qq'
 
 const SEARCH_TIMEOUT = 15000
@@ -101,15 +101,15 @@ export default () => {
 
   mainHandle<LX.CoverMatch.FilePathParams, LX.CoverMatch.CoverState>(COVER_MATCH_EVENT_NAME.get_state, async({ params }) => {
     const filePath = params?.filePath
-    if (!filePath || !await checkPath(filePath)) return { imageExists: false, backupExists: false }
+    if (!filePath || !await checkPath(filePath)) return { imageExists: false }
     return getCoverState(filePath)
   })
 
-  mainHandle<LX.CoverMatch.FilePathParams, LX.CoverMatch.RollbackResult>(COVER_MATCH_EVENT_NAME.rollback, async({ params }) => {
+  mainHandle<LX.CoverMatch.FilePathParams, LX.CoverMatch.DeleteResult>(COVER_MATCH_EVENT_NAME.delete_cover, async({ params }) => {
     const filePath = params?.filePath
     await assertFileExist(filePath)
     try {
-      return { restored: await rollbackCover(filePath) }
+      return { deleted: await deleteCover(filePath) }
     } catch (err) {
       throw toIpcError(err)
     }

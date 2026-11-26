@@ -28,12 +28,8 @@ export default () => {
     closeCoverMatch()
   }
 
-  const handleCoverMatchRestored = async() => {
-    const musicInfo = matchCoverMusicInfo.value
-    if (!musicInfo) return
-    await dialog({ message: window.i18n.t('cover_match__rollback_success') })
+  const handleCoverMatchDeleted = async(musicInfo) => {
     await refreshPlayCover(musicInfo)
-    closeCoverMatch()
   }
 
   return {
@@ -42,6 +38,6 @@ export default () => {
     openCoverMatch,
     closeCoverMatch,
     handleCoverMatchApplied,
-    handleCoverMatchRestored,
+    handleCoverMatchDeleted,
   }
 }

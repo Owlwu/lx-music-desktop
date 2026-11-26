@@ -138,7 +138,7 @@ const modules = {
     get_lyric: 'get_lyric',
     get_word_sync: 'get_word_sync',
     apply_lrc: 'apply_lrc',
-    rollback_lrc: 'rollback_lrc',
+    delete_lrc: 'delete_lrc',
     get_lrc_state: 'get_lrc_state',
     get_file_state: 'get_file_state',
   },
@@ -146,7 +146,7 @@ const modules = {
     search: 'search',
     apply: 'apply',
     get_state: 'get_state',
-    rollback: 'rollback',
+    delete_cover: 'delete_cover',
   },
 }
 

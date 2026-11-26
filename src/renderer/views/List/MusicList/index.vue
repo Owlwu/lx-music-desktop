@@ -100,7 +100,7 @@
     <search-list :list="list" :visible="isShowSearchBar" @action="handleMusicSearchAction" />
     <music-sort-modal v-model:show="isShowMusicSortModal" :music-info="selectedSortMusicInfo" :selected-num="selectedNum" @confirm="sortMusic" />
     <common-lyrics-match-modal v-model:show="isShowLyricsMatch" :music-info="matchMusicInfo" @applied="handleLyricsMatchApplied" />
-    <common-cover-match-modal v-model:show="isShowCoverMatch" :music-info="matchCoverMusicInfo" @applied="handleCoverMatchApplied" @restored="handleCoverMatchRestored" />
+    <common-cover-match-modal v-model:show="isShowCoverMatch" :music-info="matchCoverMusicInfo" @applied="handleCoverMatchApplied" @deleted="handleCoverMatchDeleted" />
     <common-batch-match-modal v-model:show="isShowBatchMatch" :progress="batchProgress" @cancel="cancelBatchMatch" />
     <base-menu v-model="isShowItemMenu" :menus="menus" :xy="menuLocation" item-name="name" @menu-click="handleMenuClick" />
   </div>
@@ -207,7 +207,7 @@ export default {
       matchCoverMusicInfo,
       openCoverMatch,
       handleCoverMatchApplied,
-      handleCoverMatchRestored,
+      handleCoverMatchDeleted,
     } = useCoverMatch()
 
     const {
@@ -341,7 +341,7 @@ export default {
       isShowCoverMatch,
       matchCoverMusicInfo,
       handleCoverMatchApplied,
-      handleCoverMatchRestored,
+      handleCoverMatchDeleted,
 
       isShowBatchMatch,
       isBatchRunning,

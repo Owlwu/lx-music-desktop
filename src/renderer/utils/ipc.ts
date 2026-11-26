@@ -448,23 +448,23 @@ export const mediaMatchGetLyric = async(params: LX.MediaMatch.GetLyricParams) =>
 }
 
 /**
- * 在线匹配歌词：写入同名 LRC（主进程负责备份/原子写）
+ * 在线匹配歌词：写入同名 LRC（主进程负责原子写）
  */
 export const mediaMatchApplyLrc = async(params: LX.MediaMatch.ApplyParams) => {
   return rendererInvoke<LX.MediaMatch.ApplyParams, LX.MediaMatch.ApplyResult>(MEDIA_MATCH_EVENT_NAME.apply_lrc, params)
 }
 
 /**
- * 在线匹配歌词：回退到 .lrc.bak
+ * 在线匹配歌词：删除同名 LRC
  * @param filePath 音频文件路径
- * @param musicId 歌曲 id；传入后回退成功会一并清理该曲的 DB 歌词覆盖
+ * @param musicId 歌曲 id；传入后删除成功会一并清理该曲的 DB 歌词覆盖
  */
-export const mediaMatchRollbackLrc = async(filePath: string, musicId?: string) => {
-  return rendererInvoke<LX.MediaMatch.RollbackParams, LX.MediaMatch.RollbackResult>(MEDIA_MATCH_EVENT_NAME.rollback_lrc, { filePath, musicId })
+export const mediaMatchDeleteLrc = async(filePath: string, musicId?: string) => {
+  return rendererInvoke<LX.MediaMatch.DeleteParams, LX.MediaMatch.DeleteResult>(MEDIA_MATCH_EVENT_NAME.delete_lrc, { filePath, musicId })
 }
 
 /**
- * 在线匹配歌词：查询同名 LRC / 备份状态
+ * 在线匹配歌词：查询同名 LRC 状态
  */
 export const mediaMatchGetLrcState = async(filePath: string) => {
   return rendererInvoke<LX.MediaMatch.FilePathParams, LX.MediaMatch.LrcState>(MEDIA_MATCH_EVENT_NAME.get_lrc_state, { filePath })
@@ -492,24 +492,24 @@ export const coverMatchSearch = async(params: LX.CoverMatch.SearchParams) => {
 }
 
 /**
- * 在线匹配封面：下载并写入同名封面（主进程负责校验/备份/原子写）
+ * 在线匹配封面：下载并写入同名封面（主进程负责校验和原子写）
  */
 export const coverMatchApply = async(params: LX.CoverMatch.ApplyParams) => {
   return rendererInvoke<LX.CoverMatch.ApplyParams, LX.CoverMatch.ApplyResult>(COVER_MATCH_EVENT_NAME.apply, params)
 }
 
 /**
- * 在线匹配封面：查询同名封面 / 备份状态
+ * 在线匹配封面：查询同名封面状态
  */
 export const coverMatchGetState = async(filePath: string) => {
   return rendererInvoke<LX.CoverMatch.FilePathParams, LX.CoverMatch.CoverState>(COVER_MATCH_EVENT_NAME.get_state, { filePath })
 }
 
 /**
- * 在线匹配封面：恢复 `.bak` 备份
+ * 在线匹配封面：删除同名封面
  */
-export const coverMatchRollback = async(filePath: string) => {
-  return rendererInvoke<LX.CoverMatch.FilePathParams, LX.CoverMatch.RollbackResult>(COVER_MATCH_EVENT_NAME.rollback, { filePath })
+export const coverMatchDelete = async(filePath: string) => {
+  return rendererInvoke<LX.CoverMatch.FilePathParams, LX.CoverMatch.DeleteResult>(COVER_MATCH_EVENT_NAME.delete_cover, { filePath })
 }
 
 

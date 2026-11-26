@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import type { Stats } from 'node:fs'
+import { unlinkSidecar, withSidecarWrite } from '../sidecarWrite'
 
 export type LrcErrorCode = 'invalid_file' | 'no_permission' | 'disk_full' | 'unknown'
 
@@ -14,23 +15,11 @@ export class LrcFileError extends Error {
   }
 }
 
-const lrcExtRxp = /\.(?:lrc|bak|tmp)$/i
+const lrcExtRxp = /\.(?:lrc|krc|bak|tmp|jpe?g|png|webp)$/i
 
-/**
- * 由音频路径推导同名 LRC / 备份 / 临时文件路径
- */
-export const getLrcPaths = (filePath: string): {
-  lrcPath: string
-  backupPath: string
-  tmpPath: string
-} => {
+const getLrcPath = (filePath: string): string => {
   const ext = path.extname(filePath)
-  const lrcPath = filePath.slice(0, filePath.length - ext.length) + '.lrc'
-  return {
-    lrcPath,
-    backupPath: lrcPath + '.bak',
-    tmpPath: lrcPath + '.tmp',
-  }
+  return filePath.slice(0, filePath.length - ext.length) + '.lrc'
 }
 
 const statOrNull = async(filePath: string): Promise<Stats | null> => {
@@ -42,7 +31,7 @@ const statOrNull = async(filePath: string): Promise<Stats | null> => {
 }
 
 /**
- * 仅允许真实存在、带扩展名、非 lrc/bak/tmp 的绝对文件路径
+ * 仅允许真实存在、带扩展名、非附属文件的绝对路径
  */
 export const isAudioFilePath = async(filePath: string): Promise<boolean> => {
   if (!filePath || typeof filePath !== 'string' || !path.isAbsolute(filePath)) return false
@@ -76,106 +65,48 @@ const toLrcError = (err: unknown): LrcFileError => {
   return new LrcFileError(code, message)
 }
 
-const removeTmpIfExists = async(tmpPath: string): Promise<void> => {
-  try {
-    await fs.rm(tmpPath, { force: true, recursive: true })
-  } catch {}
-}
-
-const unlinkIfExists = async(filePath: string): Promise<void> => {
-  try {
-    await fs.unlink(filePath)
-  } catch (err) {
-    if (getErrnoCode(err) !== 'ENOENT') throw err
-  }
-}
-
-/**
- * 写入同名 LRC：先备份原文件（仅第一次）、临时文件 + rename、失败恢复
- */
-export const applyLrc = async(filePath: string, text: string): Promise<{
-  lrcPath: string
-  backupCreated: boolean
-}> => {
+export const applyLrc = async(filePath: string, text: string): Promise<{ lrcPath: string }> => {
   if (!await isAudioFilePath(filePath)) {
     throw new LrcFileError('invalid_file', 'invalid audio file path')
   }
 
-  const { lrcPath, backupPath, tmpPath } = getLrcPaths(filePath)
-  let backupCreated = false
-
-  try {
-    const lrcStats = await statOrNull(lrcPath)
-    const backupStats = await statOrNull(backupPath)
-    if (lrcStats?.isFile() && !backupStats) {
-      await fs.rename(lrcPath, backupPath)
-      backupCreated = true
+  const lrcPath = getLrcPath(filePath)
+  return withSidecarWrite(lrcPath, async() => {
+    const tmpPath = lrcPath + '.tmp'
+    try {
+      await unlinkSidecar(tmpPath)
+      await fs.writeFile(tmpPath, text, { encoding: 'utf8', flag: 'wx' })
+      await fs.rename(tmpPath, lrcPath)
+      return { lrcPath }
+    } catch (err) {
+      throw toLrcError(err)
+    } finally {
+      await unlinkSidecar(tmpPath).catch(() => {})
     }
-
-    await removeTmpIfExists(tmpPath)
-    // UTF-8 无 BOM
-    await fs.writeFile(tmpPath, text, { encoding: 'utf8' })
-    await fs.rename(tmpPath, lrcPath)
-
-    return { lrcPath, backupCreated }
-  } catch (err) {
-    await removeTmpIfExists(tmpPath)
-    if (backupCreated) {
-      const lrcStats = await statOrNull(lrcPath)
-      if (!lrcStats) {
-        try {
-          await fs.rename(backupPath, lrcPath)
-        } catch {}
-      }
-    }
-    throw toLrcError(err)
-  }
+  })
 }
 
-/**
- * 回退：把备份内容原子写回 LRC，成功后再删除备份；任一步失败都不丢当前数据，可重试
- */
-export const rollbackLrc = async(filePath: string): Promise<boolean> => {
+export const deleteLrc = async(filePath: string): Promise<boolean> => {
   if (!await isAudioFilePath(filePath)) {
     throw new LrcFileError('invalid_file', 'invalid audio file path')
   }
 
-  const { lrcPath, backupPath } = getLrcPaths(filePath)
-  const rollbackTmpPath = lrcPath + '.rollback.tmp'
-  const backupStats = await statOrNull(backupPath)
-  if (!backupStats?.isFile()) return false
-
-  try {
-    // 先读备份内容，写临时文件后 rename 覆盖 lrc（lrc 在写入成功前保持原样）
-    const backupData = await fs.readFile(backupPath)
-    await removeTmpIfExists(rollbackTmpPath)
-    await fs.writeFile(rollbackTmpPath, backupData)
-    await fs.rename(rollbackTmpPath, lrcPath)
-    await unlinkIfExists(backupPath)
-    return true
-  } catch (err) {
-    await removeTmpIfExists(rollbackTmpPath)
-    throw toLrcError(err)
-  }
+  const lrcPath = getLrcPath(filePath)
+  return withSidecarWrite(lrcPath, async() => {
+    try {
+      const deleted = await unlinkSidecar(lrcPath)
+      return await unlinkSidecar(lrcPath.slice(0, -4) + '.LRC') || deleted
+    } catch (err) {
+      throw toLrcError(err)
+    }
+  })
 }
 
-/**
- * 查询同名 LRC / 备份状态
- */
 export const getLrcState = async(filePath: string): Promise<LX.MediaMatch.LrcState> => {
-  if (!await isAudioFilePath(filePath)) {
-    return { lrcExists: false, backupExists: false }
-  }
-
-  const { lrcPath, backupPath } = getLrcPaths(filePath)
-  const [lrcStats, backupStats] = await Promise.all([statOrNull(lrcPath), statOrNull(backupPath)])
-  const state: LX.MediaMatch.LrcState = {
-    lrcExists: !!lrcStats?.isFile(),
-    backupExists: !!backupStats?.isFile(),
-  }
-  if (lrcStats?.isFile()) {
-    state.lrcSize = lrcStats.size
-    state.lrcMtime = lrcStats.mtimeMs
-  }
-  return state
+  if (!await isAudioFilePath(filePath)) return { lrcExists: false }
+  const lrcPath = getLrcPath(filePath)
+  const lower = await statOrNull(lrcPath)
+  const stats = lower?.isFile() ? lower : await statOrNull(lrcPath.slice(0, -4) + '.LRC')
+  if (!stats?.isFile()) return { lrcExists: false }
+  return { lrcExists: true, lrcSize: stats.size, lrcMtime: stats.mtimeMs }
 }

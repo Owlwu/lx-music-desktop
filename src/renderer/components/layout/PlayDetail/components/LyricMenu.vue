@@ -27,7 +27,7 @@
         </div>
         <div :class="$style.subGroup">
           <button :class="$style.btn" ignore-tip :aria-label="$t('lyric_menu__match')" @click="handleShowMatch">{{ $t('lyric_menu__match') }}</button>
-          <button :class="$style.btn" :disabled="!sourceInfo.hasBackup" ignore-tip :aria-label="$t('lyric_menu__restore')" @click="handleRestore">{{ $t('lyric_menu__restore') }}</button>
+          <button :class="$style.btn" :disabled="!sourceInfo.canDeleteLrc || deletingLrc" ignore-tip :aria-label="$t('lyric_menu__delete')" @click="handleDeleteLrc">{{ $t('lyric_menu__delete') }}</button>
         </div>
       </div>
       <div :class="$style.group">
@@ -71,7 +71,7 @@
 import { computed, reactive, ref, watch } from '@common/utils/vueTools'
 import useMenuLocation from '@renderer/utils/compositions/useMenuLocation'
 import { debounce } from '@common/utils/common'
-import { mediaMatchGetLrcState, mediaMatchRollbackLrc, saveLyricEdited, removeLyricEdited } from '@renderer/utils/ipc'
+import { mediaMatchGetLrcState, mediaMatchDeleteLrc, saveLyricEdited, removeLyricEdited } from '@renderer/utils/ipc'
 import { getMediaMatchErrorCode, getMediaMatchErrorKey } from '@renderer/utils/mediaMatch'
 import { getFileLyricSourceInfo, refreshPlayLyric, setMusicLyricSource } from '@renderer/core/music/lyricSource'
 import { dialog } from '@renderer/plugins/Dialog'
@@ -206,12 +206,13 @@ export default {
       return 'progress' in musicInfo ? musicInfo.metadata.musicInfo : musicInfo
     }
 
+    const deletingLrc = ref(false)
     const sourceInfo = reactive({
       preferred: 'embedded',
       actual: null,
       hasEmbedded: false,
       hasLrc: false,
-      hasBackup: false,
+      canDeleteLrc: false,
     })
 
     const {
@@ -223,17 +224,19 @@ export default {
 
     const loadSourceInfo = async() => {
       const musicInfo = getCurrentMusicInfo()
+      sourceInfo.canDeleteLrc = false
       if (!musicInfo?.meta?.filePath) return
       try {
         const [sourceState, lrcState] = await Promise.all([
           getFileLyricSourceInfo(musicInfo),
           mediaMatchGetLrcState(musicInfo.meta.filePath),
         ])
+        if (getCurrentMusicInfo()?.meta.filePath !== musicInfo.meta.filePath) return
         sourceInfo.preferred = sourceState.preferred
         sourceInfo.actual = sourceState.actual
         sourceInfo.hasEmbedded = sourceState.hasEmbedded
         sourceInfo.hasLrc = sourceState.hasLrc
-        sourceInfo.hasBackup = lrcState.backupExists
+        sourceInfo.canDeleteLrc = lrcState.lrcExists
       } catch (err) {
         console.log(err)
       }
@@ -260,27 +263,28 @@ export default {
       await loadSourceInfo()
     }
 
-    const handleRestore = async() => {
+    const handleDeleteLrc = async() => {
       const musicInfo = getCurrentMusicInfo()
-      if (!musicInfo) return
-      const confirm = await dialog.confirm({
-        message: window.i18n.t('lyric_menu__restore_confirm'),
-        confirmButtonText: window.i18n.t('btn_confirm'),
-        cancelButtonText: window.i18n.t('btn_cancel'),
-      })
-      if (!confirm) return
+      if (!musicInfo?.meta?.filePath || !sourceInfo.canDeleteLrc || deletingLrc.value) return
+      deletingLrc.value = true
       try {
-        const result = await mediaMatchRollbackLrc(musicInfo.meta.filePath, musicInfo.id)
-        if (!result.restored) {
-          await dialog({ message: window.i18n.t('lyric_menu__restore_none') })
-          return
-        }
-        await setMusicLyricSource(musicInfo, sourceInfo.hasEmbedded ? 'embedded' : 'lrc', playMusicInfo.listId)
+        const confirm = await dialog.confirm({
+          message: window.i18n.t('lyric_menu__delete_confirm'),
+          confirmButtonText: window.i18n.t('btn_confirm'),
+          cancelButtonText: window.i18n.t('btn_cancel'),
+        })
+        if (!confirm) return
+        const result = await mediaMatchDeleteLrc(musicInfo.meta.filePath, musicInfo.id)
         await refreshPlayLyric(musicInfo)
-        await loadSourceInfo()
+        if (!result.deleted) await dialog({ message: window.i18n.t('lyric_menu__delete_none') })
       } catch (err) {
         console.log(err)
-        await dialog({ message: window.i18n.t(getMediaMatchErrorKey(getMediaMatchErrorCode(err))) })
+        const code = getMediaMatchErrorCode(err)
+        const message = window.i18n.t(code === 'unknown' || code === 'lrc_unknown' ? 'lyric_menu__delete_failed' : getMediaMatchErrorKey(code))
+        await dialog({ message })
+      } finally {
+        await loadSourceInfo()
+        deletingLrc.value = false
       }
     }
 
@@ -315,9 +319,10 @@ export default {
       setFontAlign,
       offsetDisabled,
       sourceInfo,
+      deletingLrc,
       setLyricSource,
       handleShowMatch,
-      handleRestore,
+      handleDeleteLrc,
       isShowLyricsMatch,
       matchMusicInfo,
       handleMatchApplied,

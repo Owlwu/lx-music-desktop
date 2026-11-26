@@ -109,7 +109,6 @@ declare namespace LX {
 
     interface ApplyResult {
       lrcPath: string
-      backupCreated: boolean
       /**
        * 本次是否写入了逐字数据（`[awlrc:]`）
        */
@@ -161,24 +160,23 @@ declare namespace LX {
       hasSidecarCover: boolean
     }
 
-    interface RollbackParams {
+    interface DeleteParams {
       /**
        * 音频文件绝对路径
        */
       filePath: string
       /**
-       * 歌曲 id（本地曲为文件路径）；有值时回退成功后一并清理该曲的 DB 歌词覆盖
+       * 歌曲 id（本地曲为文件路径）；有值时删除成功后一并清理该曲的 DB 歌词覆盖
        */
       musicId?: string
     }
 
-    interface RollbackResult {
-      restored: boolean
+    interface DeleteResult {
+      deleted: boolean
     }
 
     interface LrcState {
       lrcExists: boolean
-      backupExists: boolean
       lrcSize?: number
       lrcMtime?: number
     }

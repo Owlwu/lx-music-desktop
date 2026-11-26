@@ -53,6 +53,7 @@ export const refreshPlayLyric = async(musicInfo?: LX.Music.MusicInfo): Promise<v
   if (musicInfo && currentMusicInfo.id != musicInfo.id) return
 
   const lyricInfo = await getLyricInfo({ musicInfo: currentMusicInfo })
+  if (playMusicInfo.musicInfo?.id !== currentMusicInfo.id) return
   setMusicInfo({
     lrc: lyricInfo.lyric,
     tlrc: lyricInfo.tlyric,

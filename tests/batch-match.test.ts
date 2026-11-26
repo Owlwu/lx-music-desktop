@@ -254,7 +254,7 @@ const runBatch = async(
   const deps: Record<string, any> = {
     getListMusics: async() => musics,
     getFileState: async(filePath: string) => {
-      const id = path.basename(filePath, path.extname(filePath))
+      const id = path.win32.basename(filePath, path.win32.extname(filePath))
       if (options.failStateFor?.includes(id)) throw new Error('ipc failed: ' + id)
       return stateMap[id] ?? makeState({ fileExists: false })
     },

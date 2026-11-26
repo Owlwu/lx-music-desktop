@@ -7,7 +7,7 @@ import { log } from '@common/utils'
 import { mediaMatchError } from './errors'
 import { getFileState } from './fileState'
 import { createQuery, getCandidateLyric, getCandidateWordSync, searchCandidates } from './matcher'
-import { applyLrc, getLrcState, LrcFileError, rollbackLrc } from './lrcFile'
+import { applyLrc, getLrcState, LrcFileError, deleteLrc } from './lrcFile'
 
 const SEARCH_TIMEOUT = 15000
 const lrcFileErrorPrefix = 'MEDIA_MATCH_LRC_ERR:'
@@ -159,13 +159,13 @@ export default () => {
     return { ...result, clearedDbLyric }
   })
 
-  mainHandle<LX.MediaMatch.RollbackParams, LX.MediaMatch.RollbackResult>(MEDIA_MATCH_EVENT_NAME.rollback_lrc, async({ params }) => {
+  mainHandle<LX.MediaMatch.DeleteParams, LX.MediaMatch.DeleteResult>(MEDIA_MATCH_EVENT_NAME.delete_lrc, async({ params }) => {
     const filePath = params?.filePath
     await assertFileExist(filePath)
     try {
-      const restored = await rollbackLrc(filePath)
-      if (restored) await clearDbLyricOverride(params?.musicId ?? '')
-      return { restored }
+      const deleted = await deleteLrc(filePath)
+      if (deleted) await clearDbLyricOverride(params?.musicId ?? '')
+      return { deleted }
     } catch (err) {
       throw toIpcError(err, lrcFileErrorPrefix)
     }
@@ -173,7 +173,7 @@ export default () => {
 
   mainHandle<LX.MediaMatch.FilePathParams, LX.MediaMatch.LrcState>(MEDIA_MATCH_EVENT_NAME.get_lrc_state, async({ params }) => {
     const filePath = params?.filePath
-    if (!filePath || !await checkPath(filePath)) return { lrcExists: false, backupExists: false }
+    if (!filePath || !await checkPath(filePath)) return { lrcExists: false }
     return getLrcState(filePath)
   })
 

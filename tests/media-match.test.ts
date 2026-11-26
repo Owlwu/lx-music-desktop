@@ -39,6 +39,7 @@ const checkThrows = async(name: string, fn: () => Promise<unknown>) => {
 
 const sourceRoot = fileURLToPath(new URL('../src/', import.meta.url))
 const moduleNames = [
+  'main/modules/sidecarWrite.ts',
   'common/utils/mediaMatch/normalize.ts',
   'common/utils/mediaMatch/score.ts',
   'common/utils/mediaMatch/query.ts',
@@ -51,6 +52,7 @@ const moduleNames = [
 const moduleDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lx-media-match-'))
 for (const relPath of moduleNames) {
   const code = fs.readFileSync(path.join(sourceRoot, relPath), 'utf8')
+    .replace("from '../sidecarWrite'", "from './sidecarWrite'")
     .replace(/from '\.\/([A-Za-z0-9_]+)'/g, "from './$1.ts'")
   fs.writeFileSync(path.join(moduleDir, path.basename(relPath)), code, 'utf8')
 }
@@ -338,47 +340,26 @@ const audioContent = Buffer.from('fake-audio-content')
 fs.writeFileSync(audioPath, audioContent)
 const audioHashBefore = fs.readFileSync(audioPath).toString('base64')
 
-const firstApply = await lrcFile.applyLrc(audioPath, '[ti:Song]\n[00:01]hello\n')
-check('首次写入生成同名 lrc', fs.existsSync(path.join(workDir, 'Artist - Song.lrc')), true)
-check('首次写入不产生备份', firstApply.backupCreated, false)
-check('首次写入内容正确', fs.readFileSync(path.join(workDir, 'Artist - Song.lrc'), 'utf8'), '[ti:Song]\n[00:01]hello\n')
+const lrcPath = path.join(workDir, 'Artist - Song.lrc')
+const upperLrcPath = path.join(workDir, 'Artist - Song.LRC')
+const backupPath = lrcPath + '.bak'
+check('首次写入返回同名 LRC 路径', await lrcFile.applyLrc(audioPath, '[ti:Song]\n[00:01]hello\n'), { lrcPath })
+check('首次写入内容正确', fs.readFileSync(lrcPath, 'utf8'), '[ti:Song]\n[00:01]hello\n')
+await lrcFile.applyLrc(audioPath, 'matched-lrc')
+check('直接覆盖旧歌词', fs.readFileSync(lrcPath, 'utf8'), 'matched-lrc')
+check('覆盖不创建备份', fs.existsSync(backupPath), false)
+check('状态查询', (await lrcFile.getLrcState(audioPath)).lrcExists, true)
 
-fs.writeFileSync(path.join(workDir, 'Artist - Song.lrc'), 'original-lrc')
-const secondApply = await lrcFile.applyLrc(audioPath, 'matched-lrc')
-check('已存在 lrc 先备份', secondApply.backupCreated, true)
-check('备份保留原始内容', fs.readFileSync(path.join(workDir, 'Artist - Song.lrc.bak'), 'utf8'), 'original-lrc')
-check('新 lrc 写入成功', fs.readFileSync(path.join(workDir, 'Artist - Song.lrc'), 'utf8'), 'matched-lrc')
-
-const thirdApply = await lrcFile.applyLrc(audioPath, 'matched-lrc-2')
-check('已有备份时不再覆盖备份', thirdApply.backupCreated, false)
-check('备份内容保持不变', fs.readFileSync(path.join(workDir, 'Artist - Song.lrc.bak'), 'utf8'), 'original-lrc')
-check('lrc 被覆盖', fs.readFileSync(path.join(workDir, 'Artist - Song.lrc'), 'utf8'), 'matched-lrc-2')
-
-const stateAfterApply = await lrcFile.getLrcState(audioPath)
-check('状态查询', { lrcExists: stateAfterApply.lrcExists, backupExists: stateAfterApply.backupExists }, { lrcExists: true, backupExists: true })
-
-// 回退失败安全：写回 lrc 的 rename 失败时，当前 lrc 与备份都必须保留，可重试
-const originalRename = fsPromises.rename
-fsPromises.rename = async () => {
-  const err = new Error('operation not permitted')
-  err.code = 'EPERM'
-  throw err
-}
-try {
-  await checkThrows('回退 rename 失败抛错', async() => await lrcFile.rollbackLrc(audioPath))
-} finally {
-  fsPromises.rename = originalRename
-}
-check('回退失败时当前 lrc 未丢', fs.readFileSync(path.join(workDir, 'Artist - Song.lrc'), 'utf8'), 'matched-lrc-2')
-check('回退失败时备份保留', fs.readFileSync(path.join(workDir, 'Artist - Song.lrc.bak'), 'utf8'), 'original-lrc')
-check('回退失败不残留临时文件', fs.existsSync(path.join(workDir, 'Artist - Song.lrc.rollback.tmp')), false)
-check('回退可重试并成功', await lrcFile.rollbackLrc(audioPath), true)
-check('回退恢复原始备份', fs.readFileSync(path.join(workDir, 'Artist - Song.lrc'), 'utf8'), 'original-lrc')
-check('回退后备份消失', fs.existsSync(path.join(workDir, 'Artist - Song.lrc.bak')), false)
-check('无备份时回退返回 false', await lrcFile.rollbackLrc(audioPath), false)
+fs.writeFileSync(upperLrcPath, 'legacy-uppercase-lrc')
+fs.writeFileSync(backupPath, 'legacy-backup')
+check('删除同名歌词', await lrcFile.deleteLrc(audioPath), true)
+check('两种大小写的 LRC 都已删除', [fs.existsSync(lrcPath), fs.existsSync(upperLrcPath)], [false, false])
+check('旧备份不会被读取', await lrcFile.getLrcState(audioPath), { lrcExists: false })
+check('重复删除无效果', await lrcFile.deleteLrc(audioPath), false)
+check('删除后可重新匹配', await lrcFile.applyLrc(audioPath, 'rematched-lrc'), { lrcPath })
 check('音频文件内容未变化', fs.readFileSync(audioPath).toString('base64'), audioHashBefore)
 
-// 失败恢复：备份改名后写临时文件失败（模拟磁盘满），应把备份改回 lrc
+// 模拟磁盘满，写入失败时保留当前 LRC。
 const audioPath2 = path.join(workDir, 'Failure.mp3')
 fs.writeFileSync(audioPath2, 'audio-2')
 fs.writeFileSync(path.join(workDir, 'Failure.lrc'), 'keep-me')
@@ -393,11 +374,12 @@ try {
 } finally {
   fsPromises.writeFile = originalWriteFile
 }
-check('失败后原 lrc 恢复', fs.readFileSync(path.join(workDir, 'Failure.lrc'), 'utf8'), 'keep-me')
+check('写入失败时当前 LRC 仍可用', fs.readFileSync(path.join(workDir, 'Failure.lrc'), 'utf8'), 'keep-me')
 check('失败后不残留备份', fs.existsSync(path.join(workDir, 'Failure.lrc.bak')), false)
 check('失败后不残留临时文件', fs.existsSync(path.join(workDir, 'Failure.lrc.tmp')), false)
 
 await checkThrows('不存在的音频路径拒绝写入', async() => await lrcFile.applyLrc(path.join(workDir, 'missing.mp3'), 'x'))
+await checkThrows('不存在的音频路径拒绝删除', () => lrcFile.deleteLrc(path.join(workDir, 'missing.mp3')))
 check('lrc 扩展名路径拒绝写入', await lrcFile.isAudioFilePath(path.join(workDir, 'Artist - Song.lrc')), false)
 
 console.log(`\nresult: ${passed} passed, ${failed} failed`)

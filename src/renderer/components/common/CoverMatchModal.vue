@@ -45,14 +45,14 @@ material-modal(:show="show" max-width="78%" min-width="620px" @close="handleClos
     div(:class="$style.footer")
       div(:class="$style.tip")
       div(:class="$style.buttons")
-        base-btn(v-if="coverState.backupExists" :class="$style.btn" :disabled="applying || rollingBack" @click="handleRollback") {{ rollingBack ? $t('cover_match__rolling_back') : $t('cover_match__rollback') }}
-        base-btn(:class="$style.btn" @click="handleClose") {{ $t('btn_cancel') }}
-        base-btn(:class="$style.btn" :disabled="!canApply || applying || rollingBack" @click="handleApply") {{ applying ? $t('cover_match__applying') : $t('cover_match__apply') }}
+        base-btn(v-if="coverState.imageExists" :class="$style.btn" :disabled="applying || deleting" @click="handleDelete") {{ deleting ? $t('cover_match__deleting') : $t('cover_match__delete') }}
+        base-btn(:class="$style.btn" :disabled="deleting" @click="handleClose") {{ $t('btn_cancel') }}
+        base-btn(:class="$style.btn" :disabled="!canApply || applying || deleting" @click="handleApply") {{ applying ? $t('cover_match__applying') : $t('cover_match__apply') }}
 </template>
 
 <script>
 import { dialog } from '@renderer/plugins/Dialog'
-import { coverMatchApply, coverMatchGetState, coverMatchRollback, coverMatchSearch } from '@renderer/utils/ipc'
+import { coverMatchApply, coverMatchGetState, coverMatchDelete, coverMatchSearch } from '@renderer/utils/ipc'
 import { getCoverMatchErrorCode, getCoverMatchErrorKey } from '@renderer/utils/coverMatch'
 
 export default {
@@ -66,7 +66,7 @@ export default {
       default: null,
     },
   },
-  emits: ['update:show', 'applied', 'restored'],
+  emits: ['update:show', 'applied', 'deleted'],
   data() {
     return {
       keyword: '',
@@ -76,10 +76,9 @@ export default {
       selectedIndex: -1,
       previewBroken: false,
       applying: false,
-      rollingBack: false,
+      deleting: false,
       coverState: {
         imageExists: false,
-        backupExists: false,
       },
       requestId: 0,
       stateRequestId: 0,
@@ -106,8 +105,8 @@ export default {
       this.selectedIndex = -1
       this.previewBroken = false
       this.applying = false
-      this.rollingBack = false
-      this.coverState = { imageExists: false, backupExists: false }
+      this.deleting = false
+      this.coverState = { imageExists: false }
       void this.refreshState()
       void this.handleSearch()
     },
@@ -171,6 +170,7 @@ export default {
       }
     },
     handleClose() {
+      if (this.deleting) return
       this.requestId++
       this.$emit('update:show', false)
     },
@@ -211,17 +211,17 @@ export default {
     },
     async handleApply() {
       const candidate = this.selectedCandidate
-      if (!candidate || !this.canApply || this.applying || this.rollingBack) return
-      if (this.coverState.imageExists) {
-        const confirm = await dialog.confirm({
-          message: window.i18n.t('cover_match__replace_confirm'),
-          confirmButtonText: window.i18n.t('btn_confirm'),
-          cancelButtonText: window.i18n.t('btn_cancel'),
-        })
-        if (!confirm) return
-      }
+      if (!candidate || !this.canApply || this.applying || this.deleting) return
       this.applying = true
       try {
+        if (this.coverState.imageExists) {
+          const confirm = await dialog.confirm({
+            message: window.i18n.t('cover_match__replace_confirm'),
+            confirmButtonText: window.i18n.t('btn_confirm'),
+            cancelButtonText: window.i18n.t('btn_cancel'),
+          })
+          if (!confirm) return
+        }
         const result = await coverMatchApply({
           musicInfo: this.toPlainMusicInfo(),
           candidate: this.toPlainCandidate(candidate),
@@ -237,30 +237,29 @@ export default {
         this.applying = false
       }
     },
-    async handleRollback() {
-      if (!this.coverState.backupExists || this.applying || this.rollingBack) return
-      const confirm = await dialog.confirm({
-        message: window.i18n.t('cover_match__rollback_confirm'),
-        confirmButtonText: window.i18n.t('btn_confirm'),
-        cancelButtonText: window.i18n.t('btn_cancel'),
-      })
-      if (!confirm) return
-      this.rollingBack = true
+    async handleDelete() {
+      if (!this.coverState.imageExists || this.applying || this.deleting) return
+      const musicInfo = this.musicInfo
+      this.deleting = true
       try {
-        const result = await coverMatchRollback(this.musicInfo.meta.filePath)
-        if (result.restored) {
-          this.$emit('restored')
-          this.handleClose()
-        } else {
-          await dialog({ message: window.i18n.t('cover_match__rollback_none') })
-          await this.refreshState()
-        }
+        const confirm = await dialog.confirm({
+          message: window.i18n.t('cover_match__delete_confirm'),
+          confirmButtonText: window.i18n.t('btn_confirm'),
+          cancelButtonText: window.i18n.t('btn_cancel'),
+        })
+        if (!confirm) return
+        const result = await coverMatchDelete(musicInfo.meta.filePath)
+        this.$emit('deleted', musicInfo)
+        const message = result.deleted ? 'cover_match__delete_success' : 'cover_match__delete_none'
+        await dialog({ message: window.i18n.t(message) })
       } catch (err) {
         console.log(err)
-        const message = window.i18n.t(getCoverMatchErrorKey(getCoverMatchErrorCode(err)))
+        const code = getCoverMatchErrorCode(err)
+        const message = window.i18n.t(code === 'unknown' ? 'cover_match__delete_failed' : getCoverMatchErrorKey(code))
         await dialog({ message })
       } finally {
-        this.rollingBack = false
+        if (this.show && this.musicInfo === musicInfo) await this.refreshState()
+        this.deleting = false
       }
     },
   },
